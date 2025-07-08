@@ -1,0 +1,85 @@
+services:
+
+  #####
+  # reverse proxy for the whole environment
+  #####
+  nginx:
+    image: nginx:1.23.1-alpine
+    network_mode: host
+    volumes:
+      - ./dev/resources/nginx.conf:/etc/nginx/nginx.conf:ro
+
+  #####
+  # related services from the data-fair stack
+  #####
+
+  # simple-directory:
+  #   image: ghcr.io/data-fair/simple-directory:master
+  #   network_mode: host
+  #   depends_on:
+  #     - mongo
+  #   environment:
+  #     - DEBUG=session
+  #     - CONTACT=contact@test.com
+  #     - ADMINS=["superadmin@test.com"]
+  #     - PUBLIC_URL=http://localhost:5670/simple-directory
+  #     - MAILDEV_ACTIVE=true
+  #     - MONGO_URL=mongodb://localhost:27017/simple-directory
+  #     - STORAGE_TYPE=file
+  #     - AUTHRATELIMIT_ATTEMPTS=200
+  #     - OBSERVER_ACTIVE=false
+  #     - MANAGE_PARTNERS=true
+  #     - MANAGE_DEPARTMENTS=true
+  #     - CIPHER_PASSWORD=cipherpassword
+  #   volumes:
+  #     - ./dev/resources/users.json:/webapp/data/users.json
+  #     - ./dev/resources/organizations.json:/webapp/data/organizations.json
+
+  # data-fair:
+  #   image: ghcr.io/data-fair/data-fair:master
+  #   restart: on-failure:10
+  #   network_mode: host
+  #   depends_on:
+  #     mongo:
+  #       condition: service_started
+  #     elasticsearch:
+  #       condition: service_healthy
+  #   environment:
+  #     - PORT=8081
+  #     - DEBUG=files
+  #     - MONGO_URL=mongodb://localhost:27017/data-fair
+  #     - DIRECTORY_URL=http://localhost:5670/simple-directory
+  #     - PUBLIC_URL=http://localhost:5670/data-fair
+  #     - WS_PUBLIC_URL=ws://localhost:5670/data-fair
+  #     - OBSERVER_ACTIVE=false
+
+  #####
+  # db and search engine
+  #####
+
+  # elasticsearch:
+  #   image: ghcr.io/data-fair/elasticsearch:7.x
+  #   ports:
+  #     - 9200:9200
+  #   environment:
+  #     - discovery.type=single-node
+  #     - xpack.security.enabled=false
+  #     - "ES_JAVA_OPTS=-Xms128m -Xmx128m"
+  #   volumes:
+  #     - elasticsearch-data:/usr/share/elasticsearch/data
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:9200"]
+  #     timeout: 10s
+  #     interval: 2s
+  #     retries: 50
+
+  # mongo:
+  #   image: mongo:4.2
+  #   ports:
+  #     - 27017:27017
+  #   volumes:
+  #     - mongo-data:/data/db
+
+volumes:
+  elasticsearch-data:
+  mongo-data:

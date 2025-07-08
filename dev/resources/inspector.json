@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "dev-stdio": {
+      "command": "npm",
+      "args": ["dev", "run", "dataset", "base-sirene-des-entreprises"],
+      "env": {}
+    }
+  }
+}
