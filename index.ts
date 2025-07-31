@@ -4,7 +4,7 @@ import config from '#config'
 
 if (config.transport === 'SSE') {
   const { start, stop } = await import('./src/server.ts')
-  start().then(() => {}, err => {
+  start().then(() => { }, err => {
     console.error('Failure while starting service', err)
     process.exit(1)
   })

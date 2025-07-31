@@ -4,5 +4,5 @@ module.exports = {
   observer: {
     active: true
   },
-  dataFairUrl: undefined
+  dataFairUrl: 'https://koumoul.com/data-fair'
 }
