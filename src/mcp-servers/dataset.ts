@@ -25,6 +25,12 @@ export const datasetMCPServer = async (dataFairUrl: string, _datasetId: string) 
     version: pJson.version
   })
 
+  /*
+   * ==================================================================
+   * ---------------------------  Resources ---------------------------
+   * ==================================================================
+   */
+
   /**
    * Lists all available datasets as resources.
    * This resource provides a list of datasets with their basic information, including name, URI, and description.
@@ -41,11 +47,11 @@ export const datasetMCPServer = async (dataFairUrl: string, _datasetId: string) 
     async () => {
       console.info('Nouveau fetch de resources list-datasets')
       const contents: Array<{
-        name: string
-        uri: string
-        mimeType: string
-        text: string
-        _meta: { origin: string }
+        name: string,
+        uri: string,
+        mimeType: string,
+        text: string,
+        _meta?: { origin?: string }
       }> = []
       const listDatasets = (await axios.get(`${dataFairApiUrl}?select=id,description,title`)).data.results
       for (const dataset of listDatasets) {
@@ -119,6 +125,12 @@ export const datasetMCPServer = async (dataFairUrl: string, _datasetId: string) 
       return { contents }
     }
   )
+
+  /*
+   * ==================================================================
+   * -----------------------------  Tools -----------------------------
+   * ==================================================================
+   */
 
   /**
    * Tool to list the different datasets
@@ -320,6 +332,59 @@ export const datasetMCPServer = async (dataFairUrl: string, _datasetId: string) 
           uri: `${prefixUri}/${params.datasetId}/data#search-row-${idx}`,
           mimeType: 'application/json',
         })),
+      }
+    }
+  )
+
+  /*
+   * ==================================================================
+   * ----------------------------  Prompts ----------------------------
+   * ==================================================================
+   */
+  server.registerPrompt(
+    'dataset-search-company-headquarters',
+    {
+      title: 'Cherche le siège social d\'une entreprise',
+      description: 'Cette invite permet de trouver le siège social d\'une entreprise à partir de son nom',
+      argsSchema: {
+        companyName: z.string().describe('Le nom de l\'entreprise pour laquelle vous souhaitez trouver le siège social')
+      }
+    },
+    ({ companyName }) => {
+      return {
+        messages: [
+          {
+            role: 'user',
+            content: {
+              type: 'text',
+              text: 'Cherche le siège social de l\'entreprise ' + companyName + '\nPour cela :\n1. Cherche spécifiquement les jeux de données relatifs aux sièges sociaux d\'entreprises\n2. Cherche les informations de l\'entreprise ' + companyName + ' dans le jeu de données le plus pertinent.\n3. Retourne le siège social sous forme de texte, en indiquant aussi le nom du jeu de données et l\'URL du jeu de données utilisé pour trouver l\'information.\n\nSi tu ne trouves pas d\'information, retourne "Aucune information trouvée".',
+            }
+          }
+        ]
+      }
+    }
+  )
+
+  server.registerPrompt(
+    'dataset-search-address-gendarmerie',
+    {
+      title: 'Cherche l\'adresse d\'une gendarmerie',
+      description: 'Cette invite permet de trouver l\'adresse d\'une gendarmerie à partir de son nom',
+      argsSchema: {
+        gendarmerieName: z.string().describe('Le nom de la gendarmerie / la brigade pour laquelle vous souhaitez trouver l\'adresse')
+      }
+    },
+    ({ gendarmerieName }) => {
+      return {
+        messages: [
+          {
+            role: 'user',
+            content: {
+              type: 'text',
+              text: 'Cherche l\'adresse de la gendarmerie ' + gendarmerieName + '\nPour cela :\n1. Cherche spécifiquement les jeux de données relatifs aux adresses de gendarmeries\n2. Cherche les informations de la gendarmerie ' + gendarmerieName + ' dans le jeu de données le plus pertinent.\n3. Retourne l\'adresse sous forme de texte, en indiquant aussi le nom du jeu de données et l\'URL du jeu de données utilisé pour trouver l\'information.\n\nSi tu ne trouves pas d\'information, retourne "Aucune information trouvée".',
+            }
+          }
+        ]
       }
     }
   )
