@@ -12,7 +12,7 @@ export default app
 app.set('query parser', 'simple')
 app.set('json spaces', 2)
 
-app.use(createSiteMiddleware('mcp', { prefixOptional: true }))
+app.use(createSiteMiddleware('mcp'))
 
 // Store transports for each session type
 const transports = {
@@ -27,7 +27,7 @@ const mcpServer = await MCPServer(config.dataFairUrl)
 // Based on https://github.com/modelcontextprotocol/typescript-sdk?tab=readme-ov-file#with-session-management
 
 // Handle POST requests for client-to-server communication
-app.post('/mcp', async (req: Request, res: Response) => {
+app.post('/datasets/mcp', async (req: Request, res: Response) => {
   try {
     const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined
@@ -68,14 +68,14 @@ const handleSessionRequest = async (req: Request, res: Response) => {
 }
 
 // SSE notifications not supported in stateless mode
-app.get('/mcp', handleSessionRequest)
+app.get('/datasets/mcp', handleSessionRequest)
 // Session termination not needed in stateless mode
-app.delete('/mcp', handleSessionRequest)
+app.delete('/datasets/mcp', handleSessionRequest)
 
 // -------------- Legacy Endpoints for SSE older clients --------------
 // Based on https://github.com/modelcontextprotocol/typescript-sdk?tab=readme-ov-file#server-side-compatibility
 
-app.get('/sse', async (req: Request, res: Response) => {
+app.get('/datasets/sse', async (req: Request, res: Response) => {
   const transport = new SSEServerTransport('/messages', res)
   transports.sse[transport.sessionId] = transport
 
@@ -86,7 +86,7 @@ app.get('/sse', async (req: Request, res: Response) => {
   await mcpServer.connect(transport)
 })
 
-app.post('/messages', async (req: Request, res: Response) => {
+app.post('/datasets/messages', async (req: Request, res: Response) => {
   const sessionId = req.query.sessionId as string
   const transport = transports.sse[sessionId]
   if (transport) {

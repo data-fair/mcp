@@ -24,5 +24,4 @@ jobs:
     - name: Send Keel notifications to koumoul.com
       run: |
         curl -s --fail --show-error -X POST https://keel.admin.koumoul.com/v1/webhooks/native -u ${{ secrets.KEEL_PROD_USER }}:${{ secrets.KEEL_PROD_PASSWORD }} -d '{"name": "ghcr.io/${{ github.repository }}", "tag": "${{ steps.get_version.outputs.major }}"}'
-        curl -s --fail --show-error -X POST https://keel.admin.koumoul.com/v1/webhooks/native -u ${{ secrets.KEEL_PROD_USER }}:${{ secrets.KEEL_PROD_PASSWORD }} -d '{"name": "ghcr.io/${{ github.repository }}/worker", "tag": "${{ steps.get_version.outputs.major }}"}'
   
