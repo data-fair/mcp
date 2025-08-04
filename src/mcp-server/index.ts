@@ -8,7 +8,7 @@ import { z } from 'zod'
 const pJson = JSON.parse(await readFile(resolve(import.meta.dirname, '../../package.json'), 'utf8'))
 
 /** Function to create and configure an MCP server for datasets */
-export const datasetMCPServer = async (dataFairUrl: string, _datasetId: string) => {
+export const datasetMCPServer = async (dataFairUrl: string) => {
   /** Base URI for dataset resources */
   const prefixUri = 'data-fair://datasets'
   /** API endpoint for fetching datasets */

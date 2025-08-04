@@ -18,7 +18,5 @@ Run in development mode and stdio transport:
 
 Test building and running the docker image:
 
-```
-docker build -t mcp-dev .
-npx @modelcontextprotocol/inspector docker run -i --rm -e "DATA_FAIR_URL=https://koumoul.com/data-fair" mcp-dev dataset base-sirene-des-entreprises
-```
+    docker build -t mcp-dev .
+    npx @modelcontextprotocol/inspector docker run -i --rm -e "DATA_FAIR_URL=https://koumoul.com/data-fair" mcp-dev dataset base-sirene-des-entreprises

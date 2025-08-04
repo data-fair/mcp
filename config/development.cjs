@@ -1,4 +1,4 @@
 module.exports = {
-  port: 5778,
+  port: 5600,
   dataFairUrl: 'https://koumoul.com/data-fair'
 }

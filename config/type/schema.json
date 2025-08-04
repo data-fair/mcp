@@ -13,17 +13,14 @@
   "type": "object",
   "title": "Api config",
   "required": [
-    "transport",
+    "dataFairUrl",
+    "observer",
     "port",
-    "observer"
+    "transport"
   ],
   "properties": {
-    "transport": {
-      "type": "string",
-      "enum": ["stdio", "SSE"]
-    },
-    "port": {
-      "type": "number"
+    "dataFairUrl": {
+      "type": "string"
     },
     "observer": {
       "type": "object",
@@ -36,8 +33,12 @@
         }
       }
     },
-    "dataFairUrl": {
-      "type": "string"
+    "port": {
+      "type": "number"
+    },
+    "transport": {
+      "type": "string",
+      "enum": ["stdio", "http"]
     }
   }
 }

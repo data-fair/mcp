@@ -1,8 +1,8 @@
 module.exports = {
-  transport: 'stdio',
-  port: 8080,
+  dataFairUrl: undefined,
   observer: {
     active: true
   },
-  dataFairUrl: 'https://koumoul.com/data-fair'
+  port: 8080,
+  transport: 'stdio'
 }

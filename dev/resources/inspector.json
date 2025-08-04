@@ -2,8 +2,18 @@
   "mcpServers": {
     "dev-stdio": {
       "command": "npm",
-      "args": ["dev", "run", "dataset", "base-sirene-des-entreprises"],
+      "args": ["run", "dev"],
       "env": {}
+    },
+    "dev-streamable": {
+      "type": "streamable-http",
+      "url": "http://localhost:5600/mcp",
+      "note": "For Streamable HTTP connections, add this URL directly in your MCP Client"
+    },
+    "dev-sse": {
+      "type": "streamable-http",
+      "url": "http://localhost:5600/sse",
+      "note": "For Streamable HTTP connections, add this URL directly in your MCP Client"
     }
   }
 }
