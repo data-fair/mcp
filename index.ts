@@ -1,3 +1,4 @@
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import config from '#config'
 
 if (config.transport === 'http') {
@@ -19,8 +20,7 @@ if (config.transport === 'http') {
   })
 } else {
   const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js')
-  const { datasetMCPServer } = await import('./src/mcp-server/index.ts')
-  const server = await datasetMCPServer(config.dataFairUrl)
+  const { default: datasetMCPServer } = await import('./src/mcp-servers/datasets/index.ts') as { default: McpServer }
   const transport = new StdioServerTransport()
-  await server.connect(transport)
+  await datasetMCPServer.connect(transport)
 }
