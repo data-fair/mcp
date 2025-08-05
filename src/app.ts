@@ -12,7 +12,7 @@ export default app
 app.set('query parser', 'simple')
 app.set('json spaces', 2)
 
-app.use(createSiteMiddleware('mcp'))
+app.use(createSiteMiddleware('mcp-server'))
 
 // Store transports for each session type
 const transports = {
