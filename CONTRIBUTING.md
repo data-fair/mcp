@@ -12,11 +12,11 @@ Install dependencies:
 
 Run in development mode and stdio transport:
 
-    npx @modelcontextprotocol/inspector -e DATA_FAIR_URL=https://koumoul.com/data-fair npm run dev dataset base-sirene-des-entreprises
+    npx @modelcontextprotocol/inspector -e DATA_FAIR_URL=https://koumoul.com/data-fair npm run dev
 
 ## Docker image
 
 Test building and running the docker image:
 
     docker build -t mcp-dev .
-    npx @modelcontextprotocol/inspector docker run -i --rm -e "DATA_FAIR_URL=https://koumoul.com/data-fair" mcp-dev dataset base-sirene-des-entreprises
+    npx @modelcontextprotocol/inspector docker run -i --rm -e "DATA_FAIR_URL=https://koumoul.com/data-fair" mcp-dev

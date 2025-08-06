@@ -16,40 +16,6 @@ const registerTools = (
   prefixUri: string,
   dataFairApiUrl: string
 ) => {
-  // /**
-  //  * Tool to list all datasets.
-  //  * This tool fetches and lists all available datasets, including their ID, title, and description.
-  //  * It is useful for discovering datasets available in the Data Fair instance.
-  //  */
-  // server.registerTool(
-  //   'list_datasets',
-  //   {
-  //     title: 'Lists all datasets',
-  //     description: 'Lists all datasets and provides their ID, title, and description',
-  //     inputSchema: {},
-  //   },
-  //   async () => {
-  //     // Fetch datasets from the API with selected fields: ID, title, and description
-  //     const listDatasets = (await axios.get(`${dataFairApiUrl}?select=id,title,description`)).data.results
-  //     return {
-  //       // Format each dataset into a resource object
-  //       content: listDatasets.map((dataset: any) => ({
-  //         type: 'resource',
-  //         resource: {
-  //           name: dataset.title,
-  //           uri: `${prefixUri}/${dataset.id}`,
-  //           mimeType: 'application/markdown',
-  //           text: `# ${dataset.title}\n\n${dataset.description as string}`,
-  //           _meta: {
-  //             id: dataset.id,
-  //             origin: `${dataFairApiUrl}/${dataset.id}`
-  //           }
-  //         }
-  //       }))
-  //     }
-  //   }
-  // )
-
   /**
    * Tool to search for a specific dataset.
    * This tool allows users to search for datasets using a short string of text or keywords.
@@ -215,68 +181,53 @@ const registerTools = (
   )
 
   /**
-   * Tool to get examples of data from a specific dataset
-   * @param {string} datasetId - The ID of the dataset to fetch records from
+   * Tool to search and select specific data rows from a dataset.
+   * This tool allows users to search for specific data rows within a dataset using a search term.
+   * It returns the count of matching rows and the actual data rows.
+   * The structure of each row depends on the specific dataset being queried.
+   * @param {string} datasetId - The ID of the dataset to search in
+   * @param {string} search - A value to search for in the dataset
    */
   server.registerTool(
-    'get_records',
+    'search_data',
     {
-      title: 'Get some examples of data from one dataset',
-      description: 'Get some examples of data (also called records) from one dataset',
-      inputSchema: {
-        datasetId: z.string().describe('The datasetId to fetch'),
-      },
-    },
-    async (params: { datasetId: string }) => {
-      console.info('Nouveau fetch de tool get-records : ' + params.datasetId)
-      const dataUrl = `${dataFairApiUrl}/${params.datasetId}/lines`
-      // Fetch example records from the dataset
-      const dataRows = (await axios.get(dataUrl)).data.results
-      const content = dataRows.map((row: any, idx: number) => ({
-        type: 'text',
-        text: JSON.stringify(row),
-        uri: `${prefixUri}/${params.datasetId}/data#row-nb-${idx}`,
-        mimeType: 'application/json',
-      }))
-      return { content }
-    }
-  )
-
-  /**
-   * Tool to search and select data from a dataset
-   * @param {string} datasetId - The ID of the dataset to search within
-   * @param {string} [search] - Optional value to search for within the dataset
-   * @param {string[]} [filters] - Optional array of fields to retrieve
-   */
-  server.registerTool(
-    'search_and_select_data',
-    {
-      title: 'Search and select data from a dataset',
-      description: 'Fetch values by searching and selecting specific fields from a dataset. The different fields can be found with the tool get-information/{datasetId} with the corresponding dataset ID',
+      title: 'Search data from a dataset',
+      description: 'Search for data rows in a specific dataset using a search term',
       inputSchema: {
         datasetId: z.string().describe('The ID of the dataset'),
-        search: z.string().optional().describe('A value to search in the dataset'),
-        filters: z.array(z.string()).optional().describe('The array of fields to retrieve, if not provided, all fields will be returned'),
+        search: z.string().describe('A value to search in the dataset'),
       },
+      outputSchema: {
+        count: z.number().describe('The number of data rows matching the search criteria'),
+        lines: z.array(z.record(z.any())).describe('An array of data rows matching the search criteria. The structure varies by dataset')
+      },
+      annotations: {
+        readOnlyHint: false
+      }
     },
-    async (params: { datasetId: string, search?: string, filters?: string[] }) => {
-      console.info('Nouveau fetch de tool search-and-select-data : ' + params.datasetId + (params.search ? ` with search: ${params.search}` : '') + (params.filters ? ` and filters: ${params.filters.join(', ')}` : ''))
-      let dataUrl = `${dataFairApiUrl}/${params.datasetId}/lines?`
-      if (params.search && params.search !== '') {
-        dataUrl += `q=${params.search}&q_mode=complete`
+    async (params: { datasetId: string, search: string }) => {
+      debug('Executing search_data tool with dataset:', params.datasetId, 'and search:', params.search)
+      const dataUrl = `${dataFairApiUrl}/${params.datasetId}/lines?q=${params.search}&q_mode=complete&limit=10`
+
+      // Fetch data rows matching the search criteria
+      const response = (await axios.get(dataUrl)).data
+      const dataRows = response.results
+
+      // Format the fetched data into a structured content object
+      const structuredContent = {
+        count: response.total,
+        lines: dataRows
       }
-      if (params.filters && params.filters.length !== 0) {
-        dataUrl += '&select=' + params.filters.join(',')
-      }
-      // Fetch data rows matching the search criteria and selected fields
-      const dataRows = (await axios.get(dataUrl)).data.results
-      return {
-        content: dataRows.map((row: any, idx: number) => ({
-          type: 'text',
-          text: JSON.stringify(row),
-          uri: `${prefixUri}/${params.datasetId}/data#search-row-${idx}`,
-          mimeType: 'application/json',
-        })),
+
+      return { // https://modelcontextprotocol.io/specification/2025-06-18/server/tools#tool-result
+        structuredContent,
+        // For backwards compatibility, also return the serialized JSON in TextContent blocks
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(structuredContent),
+          }
+        ]
       }
     }
   )

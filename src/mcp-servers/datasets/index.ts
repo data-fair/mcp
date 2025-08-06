@@ -22,7 +22,7 @@ const server = new McpServer({
   version: packageJson.version,
   capabilities: {
     resources: {
-      description: 'No resources required for Vuetify assistance.',
+      // TODO: Add a description for resources
     },
     tools: {
       description: 'Tools to search and retrieve data from Data Fair datasets.',
