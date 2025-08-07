@@ -61,7 +61,7 @@ const registerTools = (
     async (params: { search: string }) => {
       debug('Executing search_dataset tool with search:', params.search)
       // Fetch datasets matching the search criteria
-      const dataUrl = `${dataFairApiUrl}?q=${params.search}&raw=true&limit=5&select=id,slug,title,description,keywords,origin,schema`
+      const dataUrl = `${dataFairApiUrl}?q=${params.search}&raw=true&size=5&select=id,slug,title,description,keywords,origin,schema`
       const fetchedData = (await axios.get(dataUrl)).data
 
       // Format the fetched data into a structured content object
@@ -207,7 +207,7 @@ const registerTools = (
     },
     async (params: { datasetId: string, search: string }) => {
       debug('Executing search_data tool with dataset:', params.datasetId, 'and search:', params.search)
-      const dataUrl = `${dataFairApiUrl}/${params.datasetId}/lines?q=${params.search}&q_mode=complete&limit=10`
+      const dataUrl = `${dataFairApiUrl}/${params.datasetId}/lines?q=${params.search}&q_mode=complete&size=10`
 
       // Fetch data rows matching the search criteria
       const response = (await axios.get(dataUrl)).data
