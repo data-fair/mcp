@@ -26,7 +26,6 @@ export function createMCPRouter (mcpServer: McpServer): Router {
         sessionIdGenerator: undefined
       })
       res.on('close', () => {
-        console.log('Request closed')
         transport.close()
         mcpServer.close()
       })

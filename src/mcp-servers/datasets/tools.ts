@@ -1,9 +1,17 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { AxiosRequestConfig } from 'axios'
 import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
+import config from '#config'
 
 const debug = Debug('datasets-tools')
+const axiosOptions: AxiosRequestConfig = {
+  baseURL: `${config.dataFairUrl}/data-fair/api/v1`,
+  headers: {
+    'User-Agent': '@data-fair/mcp (Datasets)'
+  }
+}
 
 /*
   * ==================================================================
@@ -11,73 +19,157 @@ const debug = Debug('datasets-tools')
   * ==================================================================
   */
 
-const registerTools = (
-  server: McpServer,
-  prefixUri: string,
-  dataFairApiUrl: string
-) => {
+const registerTools = (server: McpServer) => {
   /**
-   * Tool to search for a specific dataset.
-   * This tool allows users to search for datasets using a short string of text or keywords.
-   * It returns key dataset information including ID, slug, title, description, keywords (if available),
-   * origin (if available), and a schema of the columns.
-   * The column schema includes key, type, title (if available), description (if available), and concept (if available).
-   * @param {string} search - The text or keywords related to the dataset to search for.
+   * Tool to search for datasets in DataFair.
+   * This tool allows users to search for datasets using simple French keywords.
+   * It returns essential dataset information for discovery purposes including ID, title,
+   * description (if available), and source URL.
+   * Use this tool for dataset discovery, then use describe_dataset for detailed metadata
+   * or search_data to query within a specific dataset.
+   * @param {string} query - Simple French keywords to search for datasets (not full sentences).
+   *                        Examples: "élus", "DPE", "entreprises"
    */
   server.registerTool(
-    'search_dataset',
+    'search_datasets',
     {
-      title: 'Search a dataset',
-      description: 'Search for a specific dataset using text or keywords',
+      title: 'Search Datasets',
+      description: 'Search for datasets by topic, domain, or content in DataFair. Use simple French keywords (not full sentences). Returns a preview with essential metadata: a list of datasets containing ID, title, description, and link to the source URL that must be included in responses. Then use describe_dataset to get detailed metadata. Examples: "élus", "DPE", "entreprises"',
       inputSchema: {
-        search: z.string().min(3, 'Search term must be at least 3 characters long').describe('The text or keywords related to the dataset')
+        query: z.string().min(3, 'Search term must be at least 3 characters long').describe('Search terms in French (simple keywords, not sentences). Examples: "élus", "DPE", "entreprises"')
       },
       outputSchema: {
-        count: z.number().describe('The number of datasets matching the search criteria'),
+        totalCount: z.number().describe('Total number of datasets matching the search criteria'),
         datasets: z.array(
           z.object({
-            id: z.string().describe('The ID of the dataset'),
-            slug: z.string().describe('The slug of the dataset'),
-            title: z.string().describe('The title of the dataset'),
-            description: z.string().optional().describe('The description of the dataset'),
-            keywords: z.array(z.string()).optional().describe('Keywords related to the dataset, if available'),
-            origin: z.string().optional().describe('The origin of the dataset, if available'),
-            schema: z.array(
-              z.object({
-                key: z.string().describe('The key of the column'),
-                type: z.string().describe('The type of the column'),
-                title: z.string().optional().describe('The title of the column, if available'),
-                description: z.string().optional().describe('The description of the column, if available'),
-                concept: z.string().optional().describe('The concept related to the column, if available')
-              })
-            ).describe('The schema of the columns in the dataset')
+            id: z.string().describe('Unique dataset ID (required for describe_dataset and search_data tools)'),
+            title: z.string().describe('Dataset title'),
+            description: z.string().optional().describe('A markdown description of the dataset content'),
+            source: z.string().describe('Direct URL to the dataset page (must be included in AI responses as citation source)'),
           })
-        ).describe('An array of the top 5 datasets matching the search criteria')
+        ).describe('Array of datasets matching the search criteria (top 10 results)')
       },
-      annotations: {
-        readOnlyHint: false
+      annotations: { // https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations
+        readOnlyHint: true
       }
     },
-    async (params: { search: string }) => {
-      debug('Executing search_dataset tool with search:', params.search)
-      // Fetch datasets matching the search criteria
-      const dataUrl = `${dataFairApiUrl}?q=${params.search}&raw=true&size=5&select=id,slug,title,description,keywords,origin,schema`
-      const fetchedData = (await axios.get(dataUrl)).data
+    async (params: { query: string }) => {
+      debug('Executing search_dataset tool with query:', params.query)
+
+      // Fetch datasets matching the search criteria - optimized for discovery
+      const fetchedData = (await axios.get(
+        `/catalog/datasets?q=${params.query}&size=10&select=id,title,description`,
+        axiosOptions
+      )).data
 
       // Format the fetched data into a structured content object
       const structuredContent = {
         datasets: fetchedData.results.map((dataset: any) => {
           const result: any = {
             id: dataset.id,
-            slug: dataset.slug
+            title: dataset.title,
+            source: dataset.page
           }
 
-          if (dataset.title) result.title = dataset.title
           if (dataset.description) result.description = dataset.description
-          if (dataset.keywords) result.keywords = dataset.keywords
-          if (dataset.origin) result.origin = dataset.origin
 
-          result.schema = dataset.schema.map((col: any) => {
+          return result
+        }),
+        totalCount: fetchedData.count
+      }
+
+      return { // https://modelcontextprotocol.io/specification/2025-06-18/server/tools#tool-result
+        structuredContent,
+        // For backwards compatibility, a tool that returns structured content
+        // SHOULD also return the serialized JSON in a TextContent block.
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(structuredContent)
+          }
+        ]
+      }
+    }
+  )
+
+  /**
+   * Tool to get detailed metadata for a specific dataset.
+   * This tool retrieves comprehensive information about a dataset including schema,
+   * keywords, topics, frequency, spatial/temporal coverage, and other metadata.
+   * Use this after search_datasets to understand dataset structure before using search_data.
+   * @param {string} datasetId - The unique ID of the dataset to describe (obtained from search_datasets)
+   */
+  server.registerTool(
+    'describe_dataset',
+    {
+      title: 'Describe Dataset',
+      description: 'Retrieve detailed metadata for a specific dataset including schema, keywords, topics, frequency, spatial/temporal coverage, and other metadata. Use this to understand dataset structure after finding it with search_datasets and before searching data with search_data.',
+      inputSchema: {
+        datasetId: z.string().describe('The unique dataset ID obtained from search_datasets or provided by the user')
+      },
+      outputSchema: {
+        id: z.string().describe('Unique dataset Id (required for search_data tools)'),
+        slug: z.string().optional().describe('Human-readable unique identifier for the dataset, used in URLs'),
+        title: z.string().describe('Dataset title'),
+        description: z.string().optional().describe('A markdown description of the dataset content'),
+        keywords: z.array(z.string()).optional().describe('Keywords associated with the dataset'),
+        origin: z.string().optional().describe('Source or provider of the dataset'),
+        license: z.object({
+          href: z.string().describe('URL to the license text'),
+          title: z.string().describe('License name/title')
+        }).optional().describe('Dataset license information'),
+        topics: z.array(z.string()).optional().describe('Topics/categories the dataset belongs to'),
+        spatial: z.any().optional().describe('Spatial coverage information'),
+        temporal: z.any().optional().describe('Temporal coverage information'),
+        frequency: z.string().optional().describe('Update frequency of the dataset'),
+        source: z.string().describe('Direct URL to the dataset page (must be included in responses as citation source)'),
+        schema: z.array(
+          z.object({
+            key: z.string().describe('Column identifier'),
+            type: z.string().describe('Data type of the column'),
+            title: z.string().optional().describe('Human-readable column title'),
+            description: z.string().optional().describe('Column description'),
+            concept: z.string().optional().describe('Semantic concept associated with the column')
+          })
+        ).describe('Dataset column schema with types and metadata')
+      },
+      annotations: {
+        readOnlyHint: true
+      }
+    },
+    async (params: { datasetId: string }) => {
+      debug('Executing describe_dataset tool with datasetId:', params.datasetId)
+
+      // Fetch detailed dataset information
+      const fetchedData = (await axios.get(
+        `/datasets/${params.datasetId}`,
+        axiosOptions
+      )).data
+
+      // Format the fetched data
+      const dataset: any = {
+        id: fetchedData.id,
+        title: fetchedData.title,
+        source: fetchedData.page
+      }
+
+      // Add optional fields if they exist
+      if (fetchedData.slug) dataset.slug = fetchedData.slug
+      if (fetchedData.description) dataset.description = fetchedData.description
+      if (fetchedData.keywords) dataset.keywords = fetchedData.keywords
+      if (fetchedData.origin) dataset.origin = fetchedData.origin
+      if (fetchedData.license) dataset.license = fetchedData.license
+      if (fetchedData.topics) dataset.topics = fetchedData.topics.map((topic: any) => topic.title)
+      if (fetchedData.spatial) dataset.spatial = fetchedData.spatial
+      if (fetchedData.temporal) dataset.temporal = fetchedData.temporal
+      if (fetchedData.frequency) dataset.frequency = fetchedData.frequency
+
+      // Add schema information
+      if (fetchedData.schema) {
+        // Filter out special columns before mapping
+        dataset.schema = fetchedData.schema
+          .filter((col: any) => !['_i', '_id', '_rand'].includes(col.key))
+          .map((col: any) => {
             const colResult: any = {
               key: col.key,
               type: col.type
@@ -91,20 +183,14 @@ const registerTools = (
 
             return colResult
           })
-
-          return result
-        }),
-        count: fetchedData.count
       }
 
-      return { // https://modelcontextprotocol.io/specification/2025-06-18/server/tools#tool-result
-        structuredContent,
-        // For backwards compatibility, a tool that returns structured content
-        // SHOULD also return the serialized JSON in a TextContent block.
+      return {
+        structuredContent: dataset,
         content: [
           {
             type: 'text',
-            text: JSON.stringify(structuredContent),
+            text: JSON.stringify(dataset)
           }
         ]
       }
@@ -112,111 +198,52 @@ const registerTools = (
   )
 
   /**
-   * Tool to get detailed information about the fields of a specific dataset
-   * @param {string} datasetId - The ID of the dataset to fetch information for
-   */
-  server.registerTool(
-    'get_information',
-    {
-      title: 'Resource Information',
-      description: 'Provide some information about one specific dataset',
-      inputSchema: {
-        datasetId: z.string().describe('The ID of the dataset to fetch information for'),
-      },
-    },
-    async (params: { datasetId: string }) => {
-      console.info('Nouveau fetch de tool get-information : ' + params.datasetId)
-      const urlRequest = `${dataFairApiUrl}/${params.datasetId}`
-      // Fetch detailed information about the dataset
-      const datasetInfo = (await axios.get(urlRequest)).data
-
-      // Start with the description of the dataset
-      const contents = [{
-        name: 'Description',
-        uri: `${prefixUri}/${params.datasetId}#description`,
-        mimeType: 'application/markdown',
-        text: `# ${datasetInfo.title}\n\n${datasetInfo.description as string}`
-      }]
-
-      // Iterate over each property in the dataset schema to gather detailed information
-      for (const property of datasetInfo.schema) {
-        let propInfo = `key: ${property.key}`
-        if (property['x-originalName'] && property['x-originalName'] !== property.key) {
-          propInfo += `\noriginal name (column name in the original file): ${property['x-originalName']}`
-        }
-        if (property.title) {
-          propInfo += `\ntitle: ${property.title}`
-        }
-        propInfo += `\ntype: ${property.format ?? property.type}`
-        if (property.enum) {
-          propInfo += `\npossible values: ${property.enum.join(', ')}`
-        }
-        if (property['x-labels']) {
-          propInfo += '\nvalue labels: '
-          propInfo += Object.entries(property['x-labels']).map(([k, v]) => `${k}=${v}`).join(', ')
-        }
-        contents.push({
-          name: `Column ${property.title || property['x-originalName'] || property.key}`,
-          uri: `${prefixUri}/${params.datasetId}#col-info-${property.key}`,
-          mimeType: 'text/plain',
-          text: propInfo
-        })
-        if (property.description) {
-          contents.push({
-            name: `Column ${property.title || property['x-originalName'] || property.key} description`,
-            uri: `${prefixUri}/${params.datasetId}#col-desc-${property.key}`,
-            mimeType: 'application/markdown',
-            text: property.description
-          })
-        }
-      }
-      // Format each content item into a resource object
-      return {
-        content: contents.map((item) => ({
-          type: 'resource',
-          resource: item
-        }))
-      }
-    }
-  )
-
-  /**
-   * Tool to search and select specific data rows from a dataset.
-   * This tool allows users to search for specific data rows within a dataset using a search term.
-   * It returns the count of matching rows and the actual data rows.
-   * The structure of each row depends on the specific dataset being queried.
-   * @param {string} datasetId - The ID of the dataset to search in
-   * @param {string} search - A value to search for in the dataset
+   * Tool to search for specific data rows within a dataset.
+   * This tool allows users to search for data within a specific dataset using simple French keywords.
+   * It returns matching rows with their relevance scores and provides a direct link to view
+   * the filtered results in the dataset's table interface.
+   * Use this after describe_dataset to understand the dataset structure.
+   * @param {string} datasetId - The unique ID of the dataset to search in (obtained from search_datasets)
+   * @param {string} query - Simple French keywords to search for within the dataset data
    */
   server.registerTool(
     'search_data',
     {
       title: 'Search data from a dataset',
-      description: 'Search for data rows in a specific dataset using a search term',
+      description: 'Search for data rows within a specific dataset using simple French keywords. Returns matching rows with relevance scores and a direct link to view filtered results in the dataset table interface. Always include dataset license and source information when presenting results to users. Use describe_dataset first to understand the data structure.',
       inputSchema: {
-        datasetId: z.string().describe('The ID of the dataset'),
-        search: z.string().describe('A value to search in the dataset'),
+        datasetId: z.string().describe('The unique dataset ID obtained from search_datasets'),
+        query: z.string().min(1, 'Search query cannot be empty').describe('Simple French keywords to search within the dataset (not full sentences). Examples: "Jean Dupont", "Paris"'),
       },
       outputSchema: {
-        count: z.number().describe('The number of data rows matching the search criteria'),
-        lines: z.array(z.record(z.any())).describe('An array of data rows matching the search criteria. The structure varies by dataset')
+        totalCount: z.number().describe('Total number of data rows matching the search criteria'),
+        datasetId: z.string().describe('The dataset ID that was searched'),
+        searchQuery: z.string().describe('The search query that was used'),
+        sourceUrl: z.string().describe('Direct URL to view the filtered dataset results in table format (for citation and direct access to filtered view)'),
+        lines: z.array(
+          z.record(z.any()).describe('Data row object with column keys and values, plus _score field indicating relevance')
+        ).describe('Array of matching data rows (top 10 results). Each row contains dataset columns plus _score for search relevance')
       },
       annotations: {
-        readOnlyHint: false
+        readOnlyHint: true
       }
     },
-    async (params: { datasetId: string, search: string }) => {
-      debug('Executing search_data tool with dataset:', params.datasetId, 'and search:', params.search)
-      const dataUrl = `${dataFairApiUrl}/${params.datasetId}/lines?q=${params.search}&q_mode=complete&size=10`
+    async (params: { datasetId: string, query: string }) => {
+      debug('Executing search_data tool with dataset:', params.datasetId, 'and query:', params.query)
 
-      // Fetch data rows matching the search criteria
-      const response = (await axios.get(dataUrl)).data
-      const dataRows = response.results
+      // Fetch detailed dataset information
+      const response = (await axios.get(
+        `/datasets/${params.datasetId}/lines?q=${params.query}&q_mode=complete&size=10`,
+        axiosOptions
+      )).data
 
       // Format the fetched data into a structured content object
       const structuredContent = {
-        count: response.total,
-        lines: dataRows
+        totalCount: response.total,
+        datasetId: params.datasetId,
+        searchQuery: params.query,
+        sourceUrl: `${config.dataFairUrl}/data-fair/next-ui/embed/dataset/${params.datasetId}/table?q=${params.query}&q_mode=complete`,
+        lines: response.results
       }
 
       return { // https://modelcontextprotocol.io/specification/2025-06-18/server/tools#tool-result

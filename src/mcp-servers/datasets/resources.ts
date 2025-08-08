@@ -1,16 +1,18 @@
 import { type McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js'
 import axios from '@data-fair/lib-node/axios.js'
+import config from '#config'
+
+/** Base URI for dataset resources */
+const prefixUri = 'data-fair://datasets'
+/** API endpoint for fetching datasets */
+const dataFairApiUrl = `${config.dataFairUrl}/api/v1`
 
 /*
   * ==================================================================
   * ---------------------------  Resources ---------------------------
   * ==================================================================
   */
-const registerResources = (
-  server: McpServer,
-  prefixUri: string,
-  dataFairApiUrl: string
-) => {
+const registerResources = (server: McpServer) => {
   /**
    * Lists all available datasets as resources.
    * This resource provides a list of datasets with their basic information, including name, URI, and description.
