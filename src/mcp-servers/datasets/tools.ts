@@ -21,25 +21,26 @@ const axiosOptions: AxiosRequestConfig = {
 
 const registerTools = (server: McpServer) => {
   /**
-   * Tool to search for datasets in DataFair.
-   * This tool allows users to search for datasets using simple French keywords.
-   * It returns essential dataset information for discovery purposes including ID, title,
-   * description (if available), and source URL.
+   * Tool to search for datasets in DataFair using full-text search.
+   * This tool performs full-text search across dataset titles, descriptions, and metadata
+   * using simple French keywords. It returns essential dataset information for discovery
+   * purposes including ID, title, description (if available), and source URL.
    * Use this tool for dataset discovery, then use describe_dataset for detailed metadata
    * or search_data to query within a specific dataset.
-   * @param {string} query - Simple French keywords to search for datasets (not full sentences).
-   *                        Examples: "élus", "DPE", "entreprises"
+   * @param {string} query - French keywords for full-text search (not full sentences).
+   *                        The search looks across titles, descriptions, and metadata.
+   *                        Examples: "élus", "DPE", "entreprises", "logement social"
    */
   server.registerTool(
     'search_datasets',
     {
       title: 'Search Datasets',
-      description: 'Search for datasets by topic, domain, or content in DataFair. Use simple French keywords (not full sentences). Returns a preview with essential metadata: a list of datasets containing ID, title, description, and link to the source URL that must be included in responses. Then use describe_dataset to get detailed metadata. Examples: "élus", "DPE", "entreprises"',
+      description: 'Full-text search for datasets in DataFair. Uses French keywords to search across dataset titles, descriptions, and metadata (not full sentences). Returns a preview with essential metadata: a list of datasets containing ID, title, description, and link to the source URL that must be included in responses. Then use describe_dataset to get detailed metadata.',
       inputSchema: {
-        query: z.string().min(3, 'Search term must be at least 3 characters long').describe('Search terms in French (simple keywords, not sentences). Examples: "élus", "DPE", "entreprises"')
+        query: z.string().min(3, 'Search term must be at least 3 characters long').describe('French keywords for full-text search across dataset titles, descriptions, and metadata (simple keywords, not sentences). Examples: "élus", "DPE", "entreprises", "logement social"')
       },
       outputSchema: {
-        totalCount: z.number().describe('Total number of datasets matching the search criteria'),
+        totalCount: z.number().describe('Total number of datasets matching the full-text search criteria'),
         datasets: z.array(
           z.object({
             id: z.string().describe('Unique dataset ID (required for describe_dataset and search_data tools)'),
@@ -47,7 +48,7 @@ const registerTools = (server: McpServer) => {
             description: z.string().optional().describe('A markdown description of the dataset content'),
             source: z.string().describe('Direct URL to the dataset page (must be included in AI responses as citation source)'),
           })
-        ).describe('Array of datasets matching the search criteria (top 10 results)')
+        ).describe('Array of datasets matching the full-text search criteria (top 10 results)')
       },
       annotations: { // https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations
         readOnlyHint: true
@@ -198,42 +199,70 @@ const registerTools = (server: McpServer) => {
   )
 
   /**
-   * Tool to search for specific data rows within a dataset.
-   * This tool allows users to search for data within a specific dataset using simple French keywords.
-   * It returns matching rows with their relevance scores and provides a direct link to view
-   * the filtered results in the dataset's table interface.
-   * Use this after describe_dataset to understand the dataset structure.
+   * Tool to search for specific data rows within a dataset using either full-text search OR precise filters.
+   * This tool can search data in two ways:
+   * 1) Full-text search across all columns using keywords (quick and broad search)
+   * 2) Precise filtering on specific columns with exact matches, comparisons, or column-specific searches (ideal for structured queries)
+   *
+   * Returns matching rows with their relevance scores and provides a direct link to view the filtered results in the dataset's table interface.
+   * Use this after describe_dataset to understand the dataset structure and column keys.
    * @param {string} datasetId - The unique ID of the dataset to search in (obtained from search_datasets)
-   * @param {string} query - Simple French keywords to search for within the dataset data
+   * @param {string} query - French keywords for full-text search across all dataset columns
+   * @param {string} select - Optional comma-separated list of column keys to reduce output size
+   * @param {Object} filters - Optional precise filters on specific columns (alternative to query)
    */
   server.registerTool(
     'search_data',
     {
       title: 'Search data from a dataset',
-      description: 'Search for data rows within a specific dataset using simple French keywords. Returns matching rows with relevance scores and a direct link to view filtered results in the dataset table interface. Always include dataset license and source information when presenting results to users. Use describe_dataset first to understand the data structure.',
+      description: 'Search for data rows in a specific dataset using either : - Full-text search across all columns (query) for quick, broad matches, - Precise filtering (filters) to apply exact conditions, comparisons, or column-specific searches. Use filters whenever your question involves multiple criteria or numerical/date ranges, as they yield more relevant and targeted results. The query parameter is better suited for simple, one-keyword searches across the entire dataset. Returns matching rows with relevance scores and a direct link to view filtered results in the dataset table interface. Always include dataset license, direct link and source information when presenting results to users. Use describe_dataset first to understand the data structure and available column keys.',
       inputSchema: {
-        datasetId: z.string().describe('The unique dataset ID obtained from search_datasets'),
-        query: z.string().min(1, 'Search query cannot be empty').describe('Simple French keywords to search within the dataset (not full sentences). Examples: "Jean Dupont", "Paris"'),
+        datasetId: z.string().describe('The unique dataset ID obtained from search_datasets tool'),
+        query: z.string().optional().describe('French keywords for full-text search across all dataset columns (simple keywords, not sentences). Do not use with filters parameter. Examples: "Jean Dupont", "Paris", "2025"'),
+        select: z.string().optional().describe('Optional comma-separated list of specific column keys to include in the results. Useful when the dataset has many columns to reduce output size. If not provided, all columns are returned. Use column keys from describe_dataset. Example: "nom,age,ville"'),
+        filters: z.record(
+          z.string().regex(/^.+_(search|eq|gte|lte)$/, {
+            message: 'Filter key must follow pattern: column_key + suffix (_eq, _search, _gte, _lte)'
+          }),
+          z.string()
+        )
+          .optional()
+          .describe('Precise filters on specific columns. Ideal for multi-condition queries or range searches. Each filter key must be: column_key + suffix. Available suffixes: _eq (strictly equal - exact match), _search (full-text search within that column), _gte (greater than or equal), _lte (less than or equal). Use column keys from describe_dataset. Example: { "nom_search": "Jean", "age_lte": "30", "ville_eq": "Paris" } searches for people whose names contain "Jean", who are 30 years old or younger, and who live in Paris.')
       },
       outputSchema: {
-        totalCount: z.number().describe('Total number of data rows matching the search criteria'),
+        totalCount: z.number().describe('Total number of data rows matching the search criteria and filters'),
         datasetId: z.string().describe('The dataset ID that was searched'),
-        searchQuery: z.string().describe('The search query that was used'),
-        sourceUrl: z.string().describe('Direct URL to view the filtered dataset results in table format (for citation and direct access to filtered view)'),
+        sourceUrl: z.string().describe('Direct URL to view the filtered dataset results in table format (must be included in responses for citation and direct access to filtered view)'),
         lines: z.array(
-          z.record(z.any()).describe('Data row object with column keys and values, plus _score field indicating relevance')
-        ).describe('Array of matching data rows (top 10 results). Each row contains dataset columns plus _score for search relevance')
+          z.record(z.any()).describe('Data row object containing column keys as object keys with their values, plus _score field indicating search relevance (higher score = more relevant)')
+        ).describe('Array of matching data rows (top 10 results). Each row contains dataset columns (using column keys) plus _score field for search relevance ranking')
       },
       annotations: {
         readOnlyHint: true
       }
     },
-    async (params: { datasetId: string, query: string }) => {
-      debug('Executing search_data tool with dataset:', params.datasetId, 'and query:', params.query)
+    async (params: { datasetId: string, query?: string, select?: string, filters?: Record<string, any> }) => {
+      debug('Executing search_data tool with dataset:', params.datasetId, 'query:', params.query, 'select:', params.select, 'filters:', params.filters)
+
+      // Build the url
+      const url = new URL(`${config.dataFairUrl}/data-fair/api/v1/datasets/${params.datasetId}/lines`)
+      url.searchParams.append('size', '10')
+      if (params.query) {
+        url.searchParams.append('q', params.query)
+        url.searchParams.append('q_mode', 'complete')
+      }
+      if (params.select) {
+        url.searchParams.append('select', params.select)
+      }
+      if (params.filters) {
+        for (const [key, value] of Object.entries(params.filters)) {
+          url.searchParams.append(key, value)
+        }
+      }
 
       // Fetch detailed dataset information
       const response = (await axios.get(
-        `/datasets/${params.datasetId}/lines?q=${params.query}&q_mode=complete&size=10`,
+        url.toString(),
         axiosOptions
       )).data
 
@@ -241,7 +270,6 @@ const registerTools = (server: McpServer) => {
       const structuredContent = {
         totalCount: response.total,
         datasetId: params.datasetId,
-        searchQuery: params.query,
         sourceUrl: `${config.dataFairUrl}/data-fair/next-ui/embed/dataset/${params.datasetId}/table?q=${params.query}&q_mode=complete`,
         lines: response.results
       }
