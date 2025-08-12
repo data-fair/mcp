@@ -130,9 +130,14 @@ const registerTools = (server: McpServer) => {
             type: z.string().describe('Data type of the column'),
             title: z.string().optional().describe('Human-readable column title'),
             description: z.string().optional().describe('Column description'),
+            enum: z.array(z.any()).optional().describe('List of all possible values for this column'),
+            labels: z.record(z.string()).optional().describe('Object mapping actual data values (keys) to human-readable labels (values). Use keys for filters.'),
             concept: z.string().optional().describe('Semantic concept associated with the column')
           })
-        ).describe('Dataset column schema with types and metadata')
+        ).describe('Dataset column schema with types and metadata'),
+        sampleLines: z.array(z.record(z.any())).describe(
+          'Array of 3 sample data rows showing real values from the dataset. Use these examples to understand exact formatting, casing, and typical values for _eq and _search filters.'
+        )
       },
       annotations: {
         readOnlyHint: true
@@ -181,10 +186,19 @@ const registerTools = (server: McpServer) => {
             if (col['x-concept']?.title || col['x-concept']?.id) {
               colResult.concept = col['x-concept']?.title || col['x-concept']?.id
             }
+            if (col.enum) colResult.enum = col.enum
+            if (col['x-labels']) colResult.labels = col['x-labels']
 
             return colResult
           })
       }
+
+      // Add sample lines if available
+      const sampleLines = (await axios.get(
+        `/datasets/${params.datasetId}/lines?size=3`,
+        axiosOptions
+      )).data.results
+      dataset.sampleLines = sampleLines
 
       return {
         structuredContent: dataset,
@@ -215,7 +229,7 @@ const registerTools = (server: McpServer) => {
     'search_data',
     {
       title: 'Search data from a dataset',
-      description: 'Search for data rows in a specific dataset using either : - Full-text search across all columns (query) for quick, broad matches, - Precise filtering (filters) to apply exact conditions, comparisons, or column-specific searches. Use filters whenever your question involves multiple criteria or numerical/date ranges, as they yield more relevant and targeted results. The query parameter is better suited for simple, one-keyword searches across the entire dataset. Returns matching rows with relevance scores and a direct link to view filtered results in the dataset table interface. Always include dataset license, direct link and source information when presenting results to users. Use describe_dataset first to understand the data structure and available column keys.',
+      description: 'Search for data rows in a specific dataset using either :\n- Full-text search across all columns (query) for quick, broad matches,\n- Precise filtering (filters) to apply exact conditions, comparisons, or column-specific searches.\nUse filters whenever your question involves multiple criteria or numerical/date ranges, as they yield more relevant and targeted results. The query parameter is better suited for simple, one-keyword searches across the entire dataset. Returns matching rows with relevance scores and a direct link to view filtered results in the dataset table interface. Always include dataset license, direct link and source information when presenting results to users. Use describe_dataset first to understand the data structure and available column keys.',
       inputSchema: {
         datasetId: z.string().describe('The unique dataset ID obtained from search_datasets tool'),
         query: z.string().optional().describe('French keywords for full-text search across all dataset columns (simple keywords, not sentences). Do not use with filters parameter. Examples: "Jean Dupont", "Paris", "2025"'),
@@ -227,7 +241,7 @@ const registerTools = (server: McpServer) => {
           z.string()
         )
           .optional()
-          .describe('Precise filters on specific columns. Ideal for multi-condition queries or range searches. Each filter key must be: column_key + suffix. Available suffixes: _eq (strictly equal - exact match), _search (full-text search within that column), _gte (greater than or equal), _lte (less than or equal). Use column keys from describe_dataset. Example: { "nom_search": "Jean", "age_lte": "30", "ville_eq": "Paris" } searches for people whose names contain "Jean", who are 30 years old or younger, and who live in Paris.')
+          .describe('Precise filters on specific columns. Ideal for multi-condition queries or range searches. Each filter key must be: column_key + suffix. Available suffixes: _eq (strictly equal - exact match, case-sensitive. Use exact values from sampleLines in describe_dataset), _search (full-text search within that column, case-insensitive and flexible matching), _gte (greater than or equal), _lte (less than or equal). Use column keys from describe_dataset. Example: { "nom_search": "Jean", "age_lte": "30", "ville_eq": "Paris" } searches for people whose names contain "Jean", who are 30 years old or younger, and who live in Paris.')
       },
       outputSchema: {
         totalCount: z.number().describe('Total number of data rows matching the search criteria and filters'),
@@ -244,25 +258,30 @@ const registerTools = (server: McpServer) => {
     async (params: { datasetId: string, query?: string, select?: string, filters?: Record<string, any> }) => {
       debug('Executing search_data tool with dataset:', params.datasetId, 'query:', params.query, 'select:', params.select, 'filters:', params.filters)
 
-      // Build the url
-      const url = new URL(`${config.dataFairUrl}/data-fair/api/v1/datasets/${params.datasetId}/lines`)
-      url.searchParams.append('size', '10')
+      // Build common search parameters for both fetch and source URLs
+      const searchParams = new URLSearchParams()
+      searchParams.append('size', '10')
       if (params.query) {
-        url.searchParams.append('q', params.query)
-        url.searchParams.append('q_mode', 'complete')
+        searchParams.append('q', params.query)
+        searchParams.append('q_mode', 'complete')
       }
       if (params.select) {
-        url.searchParams.append('select', params.select)
+        searchParams.append('select', params.select)
       }
       if (params.filters) {
         for (const [key, value] of Object.entries(params.filters)) {
-          url.searchParams.append(key, value)
+          searchParams.append(key, String(value))
         }
       }
 
+      const fetchUrl = new URL(`/datasets/${params.datasetId}/lines`)
+      fetchUrl.search = searchParams.toString()
+      const sourceUrlObj = new URL(`${config.dataFairUrl}/data-fair/next-ui/embed/dataset/${params.datasetId}/table`)
+      sourceUrlObj.search = searchParams.toString()
+
       // Fetch detailed dataset information
       const response = (await axios.get(
-        url.toString(),
+        fetchUrl.toString(),
         axiosOptions
       )).data
 
@@ -270,7 +289,7 @@ const registerTools = (server: McpServer) => {
       const structuredContent = {
         totalCount: response.total,
         datasetId: params.datasetId,
-        sourceUrl: `${config.dataFairUrl}/data-fair/next-ui/embed/dataset/${params.datasetId}/table?q=${params.query}&q_mode=complete`,
+        sourceUrl: sourceUrlObj.toString(),
         lines: response.results
       }
 
