@@ -1,8 +1,8 @@
 import packageJson from '../../../package.json' with { type: 'json' }
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
-// import registerResources from './resources.ts'
 import registerTools from './tools.ts'
+// import registerResources from './resources.ts'
 // import registerPrompts from './prompts.ts'
 
 /**
@@ -26,8 +26,8 @@ const server = new McpServer({
   }
 })
 
-// registerResources(server)
 registerTools(server)
+// registerResources(server)
 // registerPrompts(server)
 
 export default server
