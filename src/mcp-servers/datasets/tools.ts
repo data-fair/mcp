@@ -229,11 +229,11 @@ const registerTools = (server: McpServer) => {
     'search_data',
     {
       title: 'Search data from a dataset',
-      description: 'Search for data rows in a specific dataset using either :\n- Full-text search across all columns (query) for quick, broad matches,\n- Precise filtering (filters) to apply exact conditions, comparisons, or column-specific searches.\nUse filters whenever your question involves multiple criteria or numerical/date ranges, as they yield more relevant and targeted results. The query parameter is better suited for simple, one-keyword searches across the entire dataset. Returns matching rows with relevance scores and a direct link to view filtered results in the dataset table interface. Always include dataset license, direct link and source information when presenting results to users. Use describe_dataset first to understand the data structure and available column keys.',
+      description: 'Search for data rows in a specific dataset using either :\n- Full-text search across all columns (query) for quick, broad matches,\n- Precise filtering (filters) to apply exact conditions, comparisons, or column-specific searches.\nUse filters whenever your question involves multiple criteria or numerical/date ranges, as they yield more relevant and targeted results. The query parameter is better suited for simple, one-keyword searches across the entire dataset. Returns matching rows with relevance scores and some metadata. ALWAYS include both the filtered view link AND the dataset source with license information when presenting results to users. Use describe_dataset first to understand the data structure and available column keys.',
       inputSchema: {
         datasetId: z.string().describe('The unique dataset ID obtained from search_datasets tool'),
         query: z.string().optional().describe('French keywords for full-text search across all dataset columns (simple keywords, not sentences). Do not use with filters parameter. Examples: "Jean Dupont", "Paris", "2025"'),
-        select: z.string().optional().describe('Optional comma-separated list of specific column keys to include in the results. Useful when the dataset has many columns to reduce output size. If not provided, all columns are returned. Use column keys from describe_dataset. Example: "nom,age,ville"'),
+        select: z.string().optional().describe('Optional comma-separated list of column keys to include in the results. Useful when the dataset has many columns to reduce output size. If not provided, all columns are returned. Use column keys from describe_dataset. Format: column1,column2,column3 (NO SPACES after commas). eExample: "nom,age,ville"'),
         filters: z.record(
           z.string().regex(/^.+_(search|eq|gte|lte)$/, {
             message: 'Filter key must follow pattern: column_key + suffix (_eq, _search, _gte, _lte)'
@@ -246,7 +246,7 @@ const registerTools = (server: McpServer) => {
       outputSchema: {
         totalCount: z.number().describe('Total number of data rows matching the search criteria and filters'),
         datasetId: z.string().describe('The dataset ID that was searched'),
-        sourceUrl: z.string().describe('Direct URL to view the filtered dataset results in table format (must be included in responses for citation and direct access to filtered view)'),
+        filteredViewUrl: z.string().describe('Direct URL to view the filtered dataset results in table format (must be included in responses for citation and direct access to filtered view)'),
         lines: z.array(
           z.record(z.any()).describe('Data row object containing column keys as object keys with their values, plus _score field indicating search relevance (higher score = more relevant)')
         ).describe('Array of matching data rows (top 10 results). Each row contains dataset columns (using column keys) plus _score field for search relevance ranking')
@@ -260,7 +260,6 @@ const registerTools = (server: McpServer) => {
 
       // Build common search parameters for both fetch and source URLs
       const searchParams = new URLSearchParams()
-      searchParams.append('size', '10')
       if (params.query) {
         searchParams.append('q', params.query)
         searchParams.append('q_mode', 'complete')
@@ -274,10 +273,11 @@ const registerTools = (server: McpServer) => {
         }
       }
 
-      const fetchUrl = new URL(`/datasets/${params.datasetId}/lines`)
+      const filteredViewUrlObj = new URL(`${config.dataFairUrl}/data-fair/next-ui/embed/dataset/${params.datasetId}/table`)
+      filteredViewUrlObj.search = searchParams.toString()
+      const fetchUrl = new URL(`${config.dataFairUrl}/data-fair/api/v1/datasets/${params.datasetId}/lines`)
+      searchParams.append('size', '10')
       fetchUrl.search = searchParams.toString()
-      const sourceUrlObj = new URL(`${config.dataFairUrl}/data-fair/next-ui/embed/dataset/${params.datasetId}/table`)
-      sourceUrlObj.search = searchParams.toString()
 
       // Fetch detailed dataset information
       const response = (await axios.get(
@@ -289,7 +289,7 @@ const registerTools = (server: McpServer) => {
       const structuredContent = {
         totalCount: response.total,
         datasetId: params.datasetId,
-        sourceUrl: sourceUrlObj.toString(),
+        filteredViewUrl: filteredViewUrlObj.toString(),
         lines: response.results
       }
 

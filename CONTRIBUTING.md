@@ -1,8 +1,8 @@
 # Contribution guidelines
 
-## Development environment
+## Setup
 
-Switch to the appropriate nodejs version:
+Switch to the appropriate Node.js version:
 
     nvm use
 
@@ -10,13 +10,15 @@ Install dependencies:
 
     npm install
 
-Run in development mode and stdio transport:
+## Development
 
-    npx @modelcontextprotocol/inspector -e DATA_FAIR_URL=https://koumoul.com/data-fair npm run dev
+Available scripts in `package.json`:
 
-## Docker image
+- `npm run dev-stdio`: run the MCP server in stdio transport (requires building the Docker image)
+- `npm run dev-http`: run the MCP server in HTTP transport
+- `npm run dev-inspector`: launch the Inspector (uses `dev/resources/inspector.json`)
+- `npm run dev-zellij`: launch both Inspector and MCP in HTTP mode using Zellij
 
-Test building and running the docker image:
+To build the Docker image locally:
 
-    docker build -t mcp-dev .
-    npx @modelcontextprotocol/inspector docker run -i --rm -e "DATA_FAIR_URL=https://koumoul.com/data-fair" mcp-dev
+    npm run build-image

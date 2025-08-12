@@ -5,10 +5,11 @@
   "type": "module",
   "main": "index.ts",
   "scripts": {
+    "build-image": "docker build -t mcp-dev .",
     "build-types": "df-build-types .",
     "dev-deps": "docker compose up -d --wait",
-    "dev-stdio": "TRANSPORT=stdio node --watch index.ts",
     "dev-http": "DEBUG=datasets-tools TRANSPORT=http node --watch index.ts",
+    "dev-stdio": "TRANSPORT=stdio node --watch index.ts",
     "dev-inspector": "npx @modelcontextprotocol/inspector --config dev/resources/inspector.json",
     "dev-zellij": "zellij --layout .zellij.kdl",
     "lint": "eslint .",
