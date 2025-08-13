@@ -204,6 +204,14 @@ const registerTools = (server: McpServer) => {
     }
   )
 
+  /** zod schema for filters */
+  const filtersSchema = z.record(
+    z.string().regex(/^.+_(search|eq|in|gte?|lte?|n?exists)$/, {
+      message: 'Filter key must follow pattern: column_key + suffix (_eq, _search, _in, _gte, _gt, _lte, _lt, _exists, _nexists)'
+    }),
+    z.string()
+  ).optional().describe('Precise filters on specific columns. This applies to each row individually. Each filter key must be: column_key + suffix. Available suffixes: _eq (strictly equal, case-sensitive), _in (value must be in the list, case-sensitive, values separated by a comma), _search (full-text search within that column, case-insensitive and flexible matching), _gte (greater than or equal), _gt (greater than), _lte (less than or equal), _lt (less than), _exists (exists), and _nexists (does not exist). Use column keys from describe_dataset. Example: { "nom_search": "Jean", "age_lte": "30", "ville_eq": "Paris", "code_in": "A,B,C" } searches for people whose names contain "Jean", who are 30 years old or younger, who live in Paris, and whose code is A, B, or C.')
+
   /**
    * Tool to search for specific data rows within a dataset using either full-text search OR precise filters.
    * This tool can search data in two ways:
@@ -224,14 +232,7 @@ const registerTools = (server: McpServer) => {
       inputSchema: {
         datasetId: z.string().describe('The unique dataset ID obtained from search_datasets or provided by the user'),
         query: z.string().optional().describe('French keywords for full-text search across all dataset columns (simple keywords, not sentences). Do not use with filters parameter. Examples: "Jean Dupont", "Paris", "2025"'),
-        filters: z.record(
-          z.string().regex(/^.+_(search|eq|in|gte?|lte?|n?exists)$/, {
-            message: 'Filter key must follow pattern: column_key + suffix (_eq, _search, _in, _gte, _gt, _lte, _lt, _exists, _nexists)'
-          }),
-          z.string()
-        )
-          .optional()
-          .describe('Precise filters on specific columns. This applies to each row individually. Each filter key must be: column_key + suffix. Available suffixes: _eq (strictly equal, case-sensitive), _in (value must be in the list, case-sensitive, values separated by a comma), _search (full-text search within that column, case-insensitive and flexible matching), _gte (greater than or equal), _gt (greater than), _lte (less than or equal), _lt (less than), _exists (exists), and _nexists (does not exist). Use column keys from describe_dataset. Example: { "nom_search": "Jean", "age_lte": "30", "ville_eq": "Paris", "code_in": "A,B,C" } searches for people whose names contain "Jean", who are 30 years old or younger, who live in Paris, and whose code is A, B, or C.'),
+        filters: filtersSchema,
         select: z.string().optional().describe('Optional comma-separated list of column keys to include in the results. Useful when the dataset has many columns to reduce output size. If not provided, all columns are returned. Use column keys from describe_dataset. Format: column1,column2,column3 (No spaces after commas). Example: "nom,age,ville"')
       },
       outputSchema: {
@@ -313,7 +314,7 @@ const registerTools = (server: McpServer) => {
    * summing numeric columns, or calculating averages. It is useful for summarizing dataset content
    * and extracting insights without retrieving all data rows.
    * @param {string} datasetId - The unique ID of the dataset to aggregate (obtained from search_datasets)
-   * @param {string} aggregationColumn - The column key to aggregate (use keys from describe_dataset)
+   * @param {string} aggregationColumns - The column key to aggregate (use keys from describe_dataset)
    * @param {Object} aggregation - The aggregation specification to perform on the specified column.
    *                              If not provided, defaults to counting unique values in the specified column.
    *                              Example: { "column": "age", "metric": "avg" }
@@ -325,26 +326,20 @@ const registerTools = (server: McpServer) => {
     'aggregate_data',
     {
       title: 'Aggregate data from a dataset',
-      description: 'Perform aggregations on dataset columns, such as counting unique values, summing numeric columns, or calculating averages. Use this after describe_dataset to understand the dataset structure and available column keys. Example: {"datasetId": "123", "aggregationColumn": ["code_sexe", "region"], "aggregation": {"column": "age", "metric": "avg"}} this will return the average age grouped by code_sexe and region. Aggregation is limited to a maximum of 3 columns.',
+      description: 'Perform aggregations on dataset columns, such as counting unique values, summing numeric columns, or calculating averages. Use this after describe_dataset to understand the dataset structure and available column keys. Example: {"datasetId": "123", "aggregationColumns": ["code_sexe", "region"], "aggregation": {"column": "age", "metric": "avg"}} this will return the average age grouped by code_sexe and region. Aggregation is limited to a maximum of 3 columns.',
       inputSchema: {
         datasetId: z.string().describe('The unique dataset ID obtained from search_datasets tool'),
-        aggregationColumn: z.array(z.string())
+        aggregationColumns: z.array(z.string())
+          .min(1, 'You must specify at least one column to aggregate')
           .max(3, 'You can aggregate by at most 3 columns')
-          .describe('List of column keys to aggregate (use keys from describe_dataset, max 3 columns)'),
+          .describe('List of column keys to aggregate (use keys from describe_dataset, min 1 column, max 3 columns)'),
         aggregation: z.object({
           column: z.string().describe('The column key to aggregate (use keys from describe_dataset)'),
-          metric: z.enum(['sum', 'avg', 'min', 'max']).describe('Aggregation metric to perform on the column')
+          metric: z.enum(['sum', 'avg', 'min', 'max', 'count']).describe('Aggregation metric to perform on the column. Available operations are: sum, avg, min, max, count.')
         })
           .optional()
-          .describe('The aggregation specification to perform on the specified column. Use keys from describe_dataset. If not provided, defaults to counting unique values in the specified column.'),
-        filters: z.record(
-          z.string().regex(/^.+_(search|eq|in|gte?|lte?|n?exists)$/, {
-            message: 'Filter key must follow pattern: column_key + suffix (_eq, _search, _in, _gte, _gt, _lte, _lt, _exists, _nexists)'
-          }),
-          z.string()
-        )
-          .optional()
-          .describe('Precise filters on specific columns. This applies to each row individually. Each filter key must be: column_key + suffix. Available suffixes: _eq (strictly equal, case-sensitive), _in (value must be in the list, case-sensitive, values separated by a comma), _search (full-text search within that column, case-insensitive and flexible matching), _gte (greater than or equal), _gt (greater than), _lte (less than or equal), _lt (less than), _exists (exists), and _nexists (does not exist). Use column keys from describe_dataset. Example: { "nom_search": "Jean", "age_lte": "30", "ville_eq": "Paris", "code_in": "A,B,C" } searches for people whose names contain "Jean", who are 30 years old or younger, who live in Paris, and whose code is A, B, or C.'),
+          .describe('The aggregation specification to perform on the specified column. Use keys from describe_dataset. If not provided, defaults to counting unique values in the aggregation column.'),
+        filters: filtersSchema
       },
       outputSchema: {
         total: z.number().describe('The total number of rows in the dataset'),
@@ -358,11 +353,11 @@ const registerTools = (server: McpServer) => {
         readOnlyHint: true
       }
     },
-    async (params: { datasetId: string, aggregationColumn: string[], aggregation?: { column: string, metric: 'sum' | 'avg' | 'min' | 'max' }, filters?: Record<string, string> }) => {
-      debug('Executing aggregate_data tool with dataset:', params.datasetId, 'aggregation:', JSON.stringify(params.aggregation))
+    async (params: { datasetId: string, aggregationColumns: string[], aggregation?: { column: string, metric: 'sum' | 'avg' | 'min' | 'max' | 'count' }, filters?: Record<string, string> }) => {
+      debug('Executing aggregate_data tool with dataset:', params.datasetId, 'columns:', params.aggregationColumns, 'aggregation:', JSON.stringify(params.aggregation))
 
-      // Limit aggregationColumn to 3 elements max (runtime check for extra safety)
-      if (params.aggregationColumn.length > 3) {
+      // Limit aggregationColumns to 3 elements max
+      if (params.aggregationColumns.length > 3) {
         throw new Error('You can aggregate by at most 3 columns')
       }
 
@@ -370,12 +365,11 @@ const registerTools = (server: McpServer) => {
 
       // Build common search parameters for both fetch and source URLs
       const aggsParams = new URLSearchParams()
-      aggsParams.append('field', params.aggregationColumn.slice(0, 3).join(';'))
-      if (params.aggregation) {
+      aggsParams.append('field', params.aggregationColumns.slice(0, 3).join(';'))
+      if (params.aggregation && params.aggregation.metric !== 'count') {
         aggsParams.append('metric', params.aggregation.metric)
         aggsParams.append('metric_field', params.aggregation.column)
       }
-      aggsParams.append('missing', 'Données manquantes')
 
       if (params.filters) {
         for (const [key, value] of Object.entries(params.filters)) {
