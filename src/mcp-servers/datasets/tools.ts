@@ -250,26 +250,35 @@ const registerTools = (server: McpServer) => {
     async (params: { datasetId: string, query?: string, select?: string, filters?: Record<string, any> }) => {
       debug('Executing search_data tool with dataset:', params.datasetId, 'query:', params.query, 'select:', params.select, 'filters:', params.filters)
 
-      // Build common search parameters for both fetch and source URLs
-      const searchParams = new URLSearchParams()
+      const fetchParams = new URLSearchParams()
+      const viewParams = new URLSearchParams()
+
       if (params.query) {
-        searchParams.append('q', params.query)
-        searchParams.append('q_mode', 'complete')
+        fetchParams.append('q', params.query)
+        fetchParams.append('q_mode', 'complete')
+        viewParams.append('q', params.query)
+        viewParams.append('q_mode', 'complete')
       }
-      if (params.select) {
-        searchParams.append('select', params.select)
-      }
+
       if (params.filters) {
         for (const [key, value] of Object.entries(params.filters)) {
-          searchParams.append(key, String(value))
+          fetchParams.append(key, String(value))
+          viewParams.append(key, String(value))
         }
       }
 
-      const filteredViewUrlObj = new URL(`${config.dataFairUrl}/data-fair/next-ui/embed/dataset/${params.datasetId}/table`)
-      filteredViewUrlObj.search = searchParams.toString()
+      if (params.select) {
+        fetchParams.append('select', params.select)
+        viewParams.append('cols', params.select)
+      }
+
+      fetchParams.append('size', '10')
+
       const fetchUrl = new URL(`${config.dataFairUrl}/data-fair/api/v1/datasets/${params.datasetId}/lines`)
-      searchParams.append('size', '10')
-      fetchUrl.search = searchParams.toString()
+      fetchUrl.search = fetchParams.toString()
+
+      const filteredViewUrlObj = new URL(`${config.dataFairUrl}/data-fair/next-ui/embed/dataset/${params.datasetId}/table`)
+      filteredViewUrlObj.search = viewParams.toString()
 
       // Fetch detailed dataset information
       const response = (await axios.get(
