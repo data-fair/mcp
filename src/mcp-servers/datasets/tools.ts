@@ -225,13 +225,13 @@ const registerTools = (server: McpServer) => {
         datasetId: z.string().describe('The unique dataset ID obtained from search_datasets or provided by the user'),
         query: z.string().optional().describe('French keywords for full-text search across all dataset columns (simple keywords, not sentences). Do not use with filters parameter. Examples: "Jean Dupont", "Paris", "2025"'),
         filters: z.record(
-          z.string().regex(/^.+_(search|eq|in|gte?|lte?|lt|gt)$/, {
-            message: 'Filter key must follow pattern: column_key + suffix (_eq, _search, _in, _gte, _gt, _lte, _lt)'
+          z.string().regex(/^.+_(search|eq|in|gte?|lte?|n?exists)$/, {
+            message: 'Filter key must follow pattern: column_key + suffix (_eq, _search, _in, _gte, _gt, _lte, _lt, _exists, _nexists)'
           }),
           z.string()
         )
           .optional()
-          .describe('Precise filters on specific columns. Ideal for multi-condition queries or range searches. Each filter key must be: column_key + suffix. Available suffixes: _eq (strictly equal, case-sensitive), _in (value must be in the list, case-sensitive, values separated by a comma), _search (full-text search within that column, case-insensitive and flexible matching), _gte (greater than or equal), _gt (greater than), _lte (less than or equal), _lt (less than). Use column keys from describe_dataset. Example: { "nom_search": "Jean", "age_lte": "30", "ville_eq": "Paris", "code_in": "A,B,C" } searches for people whose names contain "Jean", who are 30 years old or younger, who live in Paris, and whose code is A, B, or C.'),
+          .describe('Precise filters on specific columns. This applies to each row individually. Each filter key must be: column_key + suffix. Available suffixes: _eq (strictly equal, case-sensitive), _in (value must be in the list, case-sensitive, values separated by a comma), _search (full-text search within that column, case-insensitive and flexible matching), _gte (greater than or equal), _gt (greater than), _lte (less than or equal), _lt (less than), _exists (exists), and _nexists (does not exist). Use column keys from describe_dataset. Example: { "nom_search": "Jean", "age_lte": "30", "ville_eq": "Paris", "code_in": "A,B,C" } searches for people whose names contain "Jean", who are 30 years old or younger, who live in Paris, and whose code is A, B, or C.'),
         select: z.string().optional().describe('Optional comma-separated list of column keys to include in the results. Useful when the dataset has many columns to reduce output size. If not provided, all columns are returned. Use column keys from describe_dataset. Format: column1,column2,column3 (No spaces after commas). Example: "nom,age,ville"')
       },
       outputSchema: {
@@ -297,6 +297,16 @@ const registerTools = (server: McpServer) => {
     }
   )
 
+  /** Type zod récursif pour l'output schema */
+  const AggregationResult: z.ZodType<any> = z.object({
+    total: z.number().describe('Total number of rows aggregated for this column'),
+    totalAggregated: z.number().optional().describe('Total number of different values aggregated for this column'),
+    nonRepresented: z.number().optional().describe('The number of non-represented rows for this column'),
+    columnValue: z.union([z.string(), z.number()]).describe('The value of the aggregated column (string or number)'),
+    metricValue: z.number().nullable().optional().describe('The value of the aggregation metric (e.g., sum, avg) on the selected column'),
+    aggregations: z.lazy(() => z.array(AggregationResult)).optional().describe('Nested aggregation results when multiple columns are specified (max 3 levels deep)')
+  })
+
   /**
    * Tool to aggregate data from a specific dataset.
    * This tool allows users to perform aggregations on dataset columns, such as counting unique values,
@@ -315,47 +325,63 @@ const registerTools = (server: McpServer) => {
     'aggregate_data',
     {
       title: 'Aggregate data from a dataset',
-      description: 'Perform aggregations on dataset columns, such as counting unique values, summing numeric columns, or calculating averages. Use this after describe_dataset to understand the dataset structure and available column keys. Example: {"datasetId": "123", "aggregationColumn": "code_sexe", "operation": {"column": "age", "operation": "avg"}} this will return the average age grouped by code_sexe',
+      description: 'Perform aggregations on dataset columns, such as counting unique values, summing numeric columns, or calculating averages. Use this after describe_dataset to understand the dataset structure and available column keys. Example: {"datasetId": "123", "aggregationColumn": ["code_sexe", "region"], "aggregation": {"column": "age", "metric": "avg"}} this will return the average age grouped by code_sexe and region. Aggregation is limited to a maximum of 3 columns.',
       inputSchema: {
         datasetId: z.string().describe('The unique dataset ID obtained from search_datasets tool'),
-        aggregationColumn: z.string().describe('The column key to aggregate (use keys from describe_dataset)'),
+        aggregationColumn: z.array(z.string())
+          .max(3, 'You can aggregate by at most 3 columns')
+          .describe('List of column keys to aggregate (use keys from describe_dataset, max 3 columns)'),
         aggregation: z.object({
           column: z.string().describe('The column key to aggregate (use keys from describe_dataset)'),
           metric: z.enum(['sum', 'avg', 'min', 'max']).describe('Aggregation metric to perform on the column')
         })
           .optional()
-          .describe('The aggregation specification to perform on the specified column. Use keys from describe_dataset. If not provided, defaults to counting unique values in the specified column.')
+          .describe('The aggregation specification to perform on the specified column. Use keys from describe_dataset. If not provided, defaults to counting unique values in the specified column.'),
+        filters: z.record(
+          z.string().regex(/^.+_(search|eq|in|gte?|lte?|n?exists)$/, {
+            message: 'Filter key must follow pattern: column_key + suffix (_eq, _search, _in, _gte, _gt, _lte, _lt, _exists, _nexists)'
+          }),
+          z.string()
+        )
+          .optional()
+          .describe('Precise filters on specific columns. This applies to each row individually. Each filter key must be: column_key + suffix. Available suffixes: _eq (strictly equal, case-sensitive), _in (value must be in the list, case-sensitive, values separated by a comma), _search (full-text search within that column, case-insensitive and flexible matching), _gte (greater than or equal), _gt (greater than), _lte (less than or equal), _lt (less than), _exists (exists), and _nexists (does not exist). Use column keys from describe_dataset. Example: { "nom_search": "Jean", "age_lte": "30", "ville_eq": "Paris", "code_in": "A,B,C" } searches for people whose names contain "Jean", who are 30 years old or younger, who live in Paris, and whose code is A, B, or C.'),
       },
       outputSchema: {
         total: z.number().describe('The total number of rows in the dataset'),
         totalAggregated: z.number().describe('The total number of different values aggregated across all specified columns'),
+        nonRepresented: z.number().describe('The number of non-represented rows in the dataset, 0 if totalAggregated is less than 20, otherwise the number of non-represented rows'),
         datasetId: z.string().describe('The dataset ID that was aggregated'),
-        filteredViewUrl: z.string().describe('Direct URL to view the filtered dataset results in JSON format (must be included in responses for citation and direct access to aggregated view)'),
-        aggregations: z.array(
-          z.object({
-            total: z.number().describe('Total number of rows aggregated for this column'),
-            columnValue: z.string().describe('The value of the aggregated column'),
-            metricValue: z.number().optional().describe('The value of the aggregation metric (e.g., sum, avg) on the selected column'),
-          })
-        ).describe('Array of aggregation results for each specified column')
+        requestUrl: z.string().describe('Direct URL to API results in JSON format (must be included in responses for citation and direct access to aggregated view)'),
+        aggregations: z.array(AggregationResult).describe('Array of aggregation results for each specified column (limited to 20 rows)')
       },
       annotations: {
         readOnlyHint: true
       }
     },
-    async (params: { datasetId: string, aggregationColumn: string, aggregation?: { column: string, metric: 'sum' | 'avg' | 'min' | 'max' } }) => {
+    async (params: { datasetId: string, aggregationColumn: string[], aggregation?: { column: string, metric: 'sum' | 'avg' | 'min' | 'max' }, filters?: Record<string, string> }) => {
       debug('Executing aggregate_data tool with dataset:', params.datasetId, 'aggregation:', JSON.stringify(params.aggregation))
+
+      // Limit aggregationColumn to 3 elements max (runtime check for extra safety)
+      if (params.aggregationColumn.length > 3) {
+        throw new Error('You can aggregate by at most 3 columns')
+      }
 
       const fetchUrl = new URL(`${config.dataFairUrl}/data-fair/api/v1/datasets/${params.datasetId}/values_agg`)
 
       // Build common search parameters for both fetch and source URLs
       const aggsParams = new URLSearchParams()
-      aggsParams.append('field', params.aggregationColumn)
+      aggsParams.append('field', params.aggregationColumn.slice(0, 3).join(';'))
       if (params.aggregation) {
         aggsParams.append('metric', params.aggregation.metric)
         aggsParams.append('metric_field', params.aggregation.column)
       }
       aggsParams.append('missing', 'Données manquantes')
+
+      if (params.filters) {
+        for (const [key, value] of Object.entries(params.filters)) {
+          aggsParams.append(key, value)
+        }
+      }
 
       fetchUrl.search = aggsParams.toString()
 
@@ -365,17 +391,26 @@ const registerTools = (server: McpServer) => {
         axiosOptions
       )).data
 
+      // Map the aggregation results to a structured format (recursive)
+      const mapAggregation = (agg: any): any => ({
+        total: agg.total,
+        totalAggregated: agg.total_values,
+        nonRepresented: agg.total_other,
+        columnValue: agg.value,
+        metricValue: agg.metric,
+        ...(agg.aggs && agg.aggs.length > 0 && {
+          aggregations: agg.aggs.map(mapAggregation)
+        })
+      })
+
       // Format the fetched data into a structured content object
       const structuredContent = {
         total: response.total,
         totalAggregated: response.total_values,
+        nonRepresented: response.total_other,
         datasetId: params.datasetId,
-        filteredViewUrl: fetchUrl.toString(),
-        aggregations: response.aggs.map((agg: any) => ({
-          total: agg.total,
-          columnValue: agg.value,
-          metricValue: agg.metric
-        }))
+        requestUrl: fetchUrl.toString(),
+        aggregations: response.aggs.map(mapAggregation)
       }
 
       return { // https://modelcontextprotocol.io/specification/2025-06-18/server/tools#tool-result
