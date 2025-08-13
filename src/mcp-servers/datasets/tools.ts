@@ -225,13 +225,13 @@ const registerTools = (server: McpServer) => {
         datasetId: z.string().describe('The unique dataset ID obtained from search_datasets or provided by the user'),
         query: z.string().optional().describe('French keywords for full-text search across all dataset columns (simple keywords, not sentences). Do not use with filters parameter. Examples: "Jean Dupont", "Paris", "2025"'),
         filters: z.record(
-          z.string().regex(/^.+_(search|eq|gte|lte)$/, {
-            message: 'Filter key must follow pattern: column_key + suffix (_eq, _search, _gte, _lte)'
+          z.string().regex(/^.+_(search|eq|in|gte?|lte?|lt|gt)$/, {
+            message: 'Filter key must follow pattern: column_key + suffix (_eq, _search, _in, _gte, _gt, _lte, _lt)'
           }),
           z.string()
         )
           .optional()
-          .describe('Precise filters on specific columns. Ideal for multi-condition queries or range searches. Each filter key must be: column_key + suffix. Available suffixes: _eq (strictly equal, case-sensitive), _search (full-text search within that column, case-insensitive and flexible matching), _gte (greater than or equal), _lte (less than or equal). Use column keys from describe_dataset. Example: { "nom_search": "Jean", "age_lte": "30", "ville_eq": "Paris" } searches for people whose names contain "Jean", who are 30 years old or younger, and who live in Paris.'),
+          .describe('Precise filters on specific columns. Ideal for multi-condition queries or range searches. Each filter key must be: column_key + suffix. Available suffixes: _eq (strictly equal, case-sensitive), _in (value must be in the list, case-sensitive, values separated by a comma), _search (full-text search within that column, case-insensitive and flexible matching), _gte (greater than or equal), _gt (greater than), _lte (less than or equal), _lt (less than). Use column keys from describe_dataset. Example: { "nom_search": "Jean", "age_lte": "30", "ville_eq": "Paris", "code_in": "A,B,C" } searches for people whose names contain "Jean", who are 30 years old or younger, who live in Paris, and whose code is A, B, or C.'),
         select: z.string().optional().describe('Optional comma-separated list of column keys to include in the results. Useful when the dataset has many columns to reduce output size. If not provided, all columns are returned. Use column keys from describe_dataset. Format: column1,column2,column3 (No spaces after commas). Example: "nom,age,ville"')
       },
       outputSchema: {
@@ -282,6 +282,100 @@ const registerTools = (server: McpServer) => {
         count: response.total,
         filteredViewUrl: filteredViewUrlObj.toString(),
         lines: response.results
+      }
+
+      return { // https://modelcontextprotocol.io/specification/2025-06-18/server/tools#tool-result
+        structuredContent,
+        // For backwards compatibility, also return the serialized JSON in TextContent blocks
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(structuredContent),
+          }
+        ]
+      }
+    }
+  )
+
+  /**
+   * Tool to aggregate data from a specific dataset.
+   * This tool allows users to perform aggregations on dataset columns, such as counting unique values,
+   * summing numeric columns, or calculating averages. It is useful for summarizing dataset content
+   * and extracting insights without retrieving all data rows.
+   * @param {string} datasetId - The unique ID of the dataset to aggregate (obtained from search_datasets)
+   * @param {string} aggregationColumn - The column key to aggregate (use keys from describe_dataset)
+   * @param {Object} aggregation - The aggregation specification to perform on the specified column.
+   *                              If not provided, defaults to counting unique values in the specified column.
+   *                              Example: { "column": "age", "metric": "avg" }
+   *                              This will return the average age grouped by the specified aggregationColumn.
+   *                              Supported metrics: sum, avg, min, max.
+   *                              If you want to sum a numeric column, use { "column": "column_key", "metric": "sum" }.
+   */
+  server.registerTool(
+    'aggregate_data',
+    {
+      title: 'Aggregate data from a dataset',
+      description: 'Perform aggregations on dataset columns, such as counting unique values, summing numeric columns, or calculating averages. Use this after describe_dataset to understand the dataset structure and available column keys. Example: {"datasetId": "123", "aggregationColumn": "code_sexe", "operation": {"column": "age", "operation": "avg"}} this will return the average age grouped by code_sexe',
+      inputSchema: {
+        datasetId: z.string().describe('The unique dataset ID obtained from search_datasets tool'),
+        aggregationColumn: z.string().describe('The column key to aggregate (use keys from describe_dataset)'),
+        aggregation: z.object({
+          column: z.string().describe('The column key to aggregate (use keys from describe_dataset)'),
+          metric: z.enum(['sum', 'avg', 'min', 'max']).describe('Aggregation metric to perform on the column')
+        })
+          .optional()
+          .describe('The aggregation specification to perform on the specified column. Use keys from describe_dataset. If not provided, defaults to counting unique values in the specified column.')
+      },
+      outputSchema: {
+        total: z.number().describe('The total number of rows in the dataset'),
+        totalAggregated: z.number().describe('The total number of different values aggregated across all specified columns'),
+        datasetId: z.string().describe('The dataset ID that was aggregated'),
+        filteredViewUrl: z.string().describe('Direct URL to view the filtered dataset results in JSON format (must be included in responses for citation and direct access to aggregated view)'),
+        aggregations: z.array(
+          z.object({
+            total: z.number().describe('Total number of rows aggregated for this column'),
+            columnValue: z.string().describe('The value of the aggregated column'),
+            metricValue: z.number().optional().describe('The value of the aggregation metric (e.g., sum, avg) on the selected column'),
+          })
+        ).describe('Array of aggregation results for each specified column')
+      },
+      annotations: {
+        readOnlyHint: true
+      }
+    },
+    async (params: { datasetId: string, aggregationColumn: string, aggregation?: { column: string, metric: 'sum' | 'avg' | 'min' | 'max' } }) => {
+      debug('Executing aggregate_data tool with dataset:', params.datasetId, 'aggregation:', JSON.stringify(params.aggregation))
+
+      const fetchUrl = new URL(`${config.dataFairUrl}/data-fair/api/v1/datasets/${params.datasetId}/values_agg`)
+
+      // Build common search parameters for both fetch and source URLs
+      const aggsParams = new URLSearchParams()
+      aggsParams.append('field', params.aggregationColumn)
+      if (params.aggregation) {
+        aggsParams.append('metric', params.aggregation.metric)
+        aggsParams.append('metric_field', params.aggregation.column)
+      }
+      aggsParams.append('missing', 'Données manquantes')
+
+      fetchUrl.search = aggsParams.toString()
+
+      // Fetch detailed dataset information
+      const response = (await axios.get(
+        fetchUrl.toString(),
+        axiosOptions
+      )).data
+
+      // Format the fetched data into a structured content object
+      const structuredContent = {
+        total: response.total,
+        totalAggregated: response.total_values,
+        datasetId: params.datasetId,
+        filteredViewUrl: fetchUrl.toString(),
+        aggregations: response.aggs.map((agg: any) => ({
+          total: agg.total,
+          columnValue: agg.value,
+          metricValue: agg.metric
+        }))
       }
 
       return { // https://modelcontextprotocol.io/specification/2025-06-18/server/tools#tool-result
