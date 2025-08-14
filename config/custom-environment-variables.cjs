@@ -3,7 +3,7 @@
  */
 
 module.exports = {
-  dataFairUrl: 'DATA_FAIR_URL',
+  portalUrl: 'PORTAL_URL',
   observer: {
     active: 'OBSERVER_ACTIVE'
   },

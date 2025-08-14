@@ -13,14 +13,14 @@
   "type": "object",
   "title": "Api config",
   "required": [
-    "dataFairUrl",
     "observer",
     "port",
     "transport"
   ],
   "properties": {
-    "dataFairUrl": {
-      "type": "string"
+    "portalUrl": {
+      "type": "string",
+      "description": "The URL of the portal. By default, in http mode the host of the request is used."
     },
     "observer": {
       "type": "object",

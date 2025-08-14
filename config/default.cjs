@@ -1,5 +1,5 @@
 module.exports = {
-  dataFairUrl: undefined,
+  portalUrl: undefined,
   observer: {
     active: true
   },

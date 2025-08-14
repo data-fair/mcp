@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { IsomorphicHeaders } from '@modelcontextprotocol/sdk/types.js'
 import type { AxiosRequestConfig } from 'axios'
 import { z } from 'zod'
 import Debug from 'debug'
@@ -6,12 +7,34 @@ import axios from '@data-fair/lib-node/axios.js'
 import config from '#config'
 
 const debug = Debug('datasets-tools')
-const axiosOptions: AxiosRequestConfig = {
-  baseURL: `${config.dataFairUrl}/data-fair/api/v1`,
+
+/**
+ * Based on https://github.com/data-fair/lib/blob/664c427f47233379c2051a08c5c610bcf6376b89/packages/express/req-origin.ts#L18
+ */
+const getOrigin = (headers: IsomorphicHeaders | undefined): string => {
+  if (config.portalUrl) return config.portalUrl
+  if (!headers) throw new Error('Headers or portalUrl are required to determine the origin.')
+
+  const forwardedHost = headers['x-forwarded-host']
+  if (!forwardedHost) throw new Error('The "X-Forwarded-Host" header is required, please check the configuration of the reverse-proxy.')
+
+  const forwardedProto = headers['x-forwarded-proto']
+  if (!forwardedProto) throw new Error('The "X-Forwarded-Proto" header is required, please check the configuration of the reverse-proxy.')
+
+  const origin = `${forwardedProto}://${forwardedHost}`
+  const port = headers['x-forwarded-port']
+  if (port && !(port === '443' && forwardedProto === 'https') && !(port === '80' && forwardedProto === 'http')) {
+    return origin + ':' + port
+  } else {
+    return origin
+  }
+}
+const buildAxiosOptions = (headers: IsomorphicHeaders | undefined): AxiosRequestConfig => ({
+  baseURL: getOrigin(headers) + '/data-fair/api/v1',
   headers: {
     'User-Agent': '@data-fair/mcp (Datasets)'
   }
-}
+})
 
 /*
   * ==================================================================
@@ -47,13 +70,13 @@ const registerTools = (server: McpServer) => {
         readOnlyHint: true
       }
     },
-    async (params: { query: string }) => {
+    async (params: { query: string }, extra) => {
       debug('Executing search_dataset tool with query:', params.query)
 
       // Fetch datasets matching the search criteria - optimized for discovery
       const fetchedData = (await axios.get(
         `/catalog/datasets?q=${params.query}&size=10&select=id,title,description`,
-        axiosOptions
+        buildAxiosOptions(extra.requestInfo?.headers)
       )).data
 
       // Format the fetched data into a structured content object
@@ -134,13 +157,13 @@ const registerTools = (server: McpServer) => {
         readOnlyHint: true
       }
     },
-    async (params: { datasetId: string }) => {
+    async (params: { datasetId: string }, extra) => {
       debug('Executing describe_dataset tool with datasetId:', params.datasetId)
 
       // Fetch detailed dataset information
       const fetchedData = (await axios.get(
         `/datasets/${params.datasetId}`,
-        axiosOptions
+        buildAxiosOptions(extra.requestInfo?.headers)
       )).data
 
       // Format the fetched data
@@ -188,7 +211,7 @@ const registerTools = (server: McpServer) => {
       // Add sample lines if available
       const sampleLines = (await axios.get(
         `/datasets/${params.datasetId}/lines?size=3`,
-        axiosOptions
+        buildAxiosOptions(extra.requestInfo?.headers)
       )).data.results
       dataset.sampleLines = sampleLines
 
@@ -247,7 +270,7 @@ const registerTools = (server: McpServer) => {
         readOnlyHint: true
       }
     },
-    async (params: { datasetId: string, query?: string, select?: string, filters?: Record<string, any> }) => {
+    async (params: { datasetId: string, query?: string, select?: string, filters?: Record<string, any> }, extra) => {
       debug('Executing search_data tool with dataset:', params.datasetId, 'query:', params.query, 'select:', params.select, 'filters:', params.filters)
 
       const fetchParams = new URLSearchParams()
@@ -274,16 +297,16 @@ const registerTools = (server: McpServer) => {
 
       fetchParams.append('size', '10')
 
-      const fetchUrl = new URL(`${config.dataFairUrl}/data-fair/api/v1/datasets/${params.datasetId}/lines`)
+      const fetchUrl = new URL(`datasets/${params.datasetId}/lines`)
       fetchUrl.search = fetchParams.toString()
 
-      const filteredViewUrlObj = new URL(`${config.dataFairUrl}/data-fair/next-ui/embed/dataset/${params.datasetId}/table`)
+      const filteredViewUrlObj = new URL(`${getOrigin(extra.requestInfo?.headers)}/data-fair/next-ui/embed/dataset/${params.datasetId}/table`)
       filteredViewUrlObj.search = viewParams.toString()
 
       // Fetch detailed dataset information
       const response = (await axios.get(
         fetchUrl.toString(),
-        axiosOptions
+        buildAxiosOptions(extra.requestInfo?.headers)
       )).data
 
       // Format the fetched data into a structured content object
@@ -362,7 +385,7 @@ const registerTools = (server: McpServer) => {
         readOnlyHint: true
       }
     },
-    async (params: { datasetId: string, aggregationColumns: string[], aggregation?: { column: string, metric: 'sum' | 'avg' | 'min' | 'max' | 'count' }, filters?: Record<string, string> }) => {
+    async (params: { datasetId: string, aggregationColumns: string[], aggregation?: { column: string, metric: 'sum' | 'avg' | 'min' | 'max' | 'count' }, filters?: Record<string, string> }, extra) => {
       debug('Executing aggregate_data tool with dataset:', params.datasetId, 'columns:', params.aggregationColumns, 'aggregation:', JSON.stringify(params.aggregation))
 
       // Limit aggregationColumns to 3 elements max
@@ -370,7 +393,7 @@ const registerTools = (server: McpServer) => {
         throw new Error('You can aggregate by at most 3 columns')
       }
 
-      const fetchUrl = new URL(`${config.dataFairUrl}/data-fair/api/v1/datasets/${params.datasetId}/values_agg`)
+      const fetchUrl = new URL(`datasets/${params.datasetId}/values_agg`)
 
       // Build common search parameters for both fetch and source URLs
       const aggsParams = new URLSearchParams()
@@ -391,7 +414,7 @@ const registerTools = (server: McpServer) => {
       // Fetch detailed dataset information
       const response = (await axios.get(
         fetchUrl.toString(),
-        axiosOptions
+        buildAxiosOptions(extra.requestInfo?.headers)
       )).data
 
       // Map the aggregation results to a structured format (recursive)

@@ -5,7 +5,7 @@ import config from '#config'
 /** Base URI for dataset resources */
 const prefixUri = 'data-fair://datasets'
 /** API endpoint for fetching datasets */
-const dataFairApiUrl = `${config.dataFairUrl}/api/v1`
+const dataFairApiUrl = `${config.portalUrl}/api/v1`
 
 /*
   * ==================================================================

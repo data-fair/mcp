@@ -1,4 +1,4 @@
 module.exports = {
   port: 5600,
-  dataFairUrl: 'https://opendata.koumoul.com'
+  portalUrl: 'https://opendata.koumoul.com'
 }
