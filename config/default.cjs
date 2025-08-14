@@ -1,8 +1,8 @@
 module.exports = {
-  transport: 'stdio',
-  port: 8080,
+  portalUrl: undefined,
   observer: {
     active: true
   },
-  dataFairUrl: undefined
+  port: 8080,
+  transport: 'stdio'
 }

@@ -13,17 +13,15 @@
   "type": "object",
   "title": "Api config",
   "required": [
-    "transport",
+    "observer",
     "port",
-    "observer"
+    "transport"
   ],
   "properties": {
-    "transport": {
+    "portalUrl": {
       "type": "string",
-      "enum": ["stdio", "SSE"]
-    },
-    "port": {
-      "type": "number"
+      "description": "Base URL of the Data Fair portal. If not set and transport=\"http\", the portal URL is inferred from the request origin. When transport=\"stdio\", you must set this value.",
+      "example": "https://opendata.koumoul.com"
     },
     "observer": {
       "type": "object",
@@ -36,8 +34,12 @@
         }
       }
     },
-    "dataFairUrl": {
-      "type": "string"
+    "port": {
+      "type": "number"
+    },
+    "transport": {
+      "type": "string",
+      "enum": ["stdio", "http"]
     }
   }
 }

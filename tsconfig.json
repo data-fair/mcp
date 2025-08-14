@@ -1,14 +1,15 @@
 {
   "compilerOptions": {
     "target": "esnext",
-    "module": "nodenext",
+    "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "strict": true,
     "allowJs": true,
     "checkJs": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "resolveJsonModule": true
   },
-  "exclude": ["node_modules", ".type", "ui", "dev", "test-it"]
+  "exclude": ["node_modules", ".type", "dev", "test-it"]
 }

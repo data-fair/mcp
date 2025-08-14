@@ -1,28 +1,28 @@
 layout {
-    pane {
-      split_direction "vertical"
-      pane name="MCP" borderless=true {
-        command "bash"
-        args "-ic" "nvm use > /dev/null 2>&1 && bash"
-      }
-      pane name="deps" {
-        command "bash"
-        args "-ic" "npm run dev-deps && watch -n 4 \"docker compose ps --all --format 'table {{.Name}}\t{{.Status}}'\""
-      }
+  pane {
+    split_direction "vertical"
+    pane name="MCP" borderless=true {
+      command "bash"
+      args "-ic" "nvm use > /dev/null 2>&1 && bash"
     }
-    pane {
-      split_direction "vertical"
-      pane name="api" {
-        command "bash"
-        args "-ic" "nvm use > /dev/null 2>&1 && npm run dev-sse"
-      }
-      pane name="inspector" {
-        command "bash"
-        args "-ic" "nvm use > /dev/null 2>&1 && npm run dev-inspector"
-      }
+    // pane name="deps" {
+    //   command "bash"
+    //   args "-ic" "npm run dev-deps && watch -n 4 \"docker compose ps --all --format 'table {{.Name}}\t{{.Status}}'\""
+    // }
+  }
+  pane {
+    split_direction "vertical"
+    pane name="mcp-server (HTTP)" {
+      command "bash"
+      args "-ic" "nvm use > /dev/null 2>&1 && npm run dev-http"
     }
-    pane size=2 borderless=true {
-        command "bash"
-        args "-ic" "echo -n -e \"Inspector at \\e[1;96mhttp://localhost:6274\\033[0m | Dataset example at \\e[1;96mhttp://localhost:5670/mcp/api/datasets/base-sirene-des-entreprises/sse\\033[0m\""
+    pane name="inspector" {
+      command "bash"
+      args "-ic" "nvm use > /dev/null 2>&1 && npm run dev-inspector -- --server dev-streamable"
     }
+  }
+  pane size=2 borderless=true {
+    command "bash"
+    args "-ic" "echo -n -e \"Inspector at \\e[1;96mhttp://localhost:6274\\033[0m\""
+  }
 }

@@ -3,10 +3,10 @@
  */
 
 module.exports = {
-  transport: 'TRANSPORT',
-  port: 'PORT',
+  portalUrl: 'PORTAL_URL',
   observer: {
     active: 'OBSERVER_ACTIVE'
   },
-  dataFairUrl: 'DATA_FAIR_URL'
+  port: 'PORT',
+  transport: 'TRANSPORT'
 }

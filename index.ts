@@ -1,10 +1,9 @@
-// TODO handle SSE or STDIO transports based on config
-
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import config from '#config'
 
-if (config.transport === 'SSE') {
+if (config.transport === 'http') {
   const { start, stop } = await import('./src/server.ts')
-  start().then(() => {}, err => {
+  start().then(() => { }, err => {
     console.error('Failure while starting service', err)
     process.exit(1)
   })
@@ -21,18 +20,7 @@ if (config.transport === 'SSE') {
   })
 } else {
   const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js')
-  const params = process.argv.slice(2)
-  const mcpType = params[0]
-  if (!mcpType) throw new Error('expected at least 1 argument: MCP server type (supported "dataset")')
-  if (mcpType === 'dataset') {
-    const datasetId = params[1]
-    if (!datasetId) throw new Error('expected at least 2 arguments: "dataset" and datasetId')
-    const { datasetMCPServer } = await import('./src/mcp-servers/dataset.ts')
-    if (!config.dataFairUrl) throw new Error('dataFairUrl is required in config')
-    const server = await datasetMCPServer(config.dataFairUrl, datasetId)
-    const transport = new StdioServerTransport()
-    await server.connect(transport)
-  } else {
-    throw new Error(`MDC server type unknown, expected "dataset" got "${mcpType}"`)
-  }
+  const { default: datasetMCPServer } = await import('./src/mcp-servers/datasets/index.ts') as { default: McpServer }
+  const transport = new StdioServerTransport()
+  await datasetMCPServer.connect(transport)
 }
