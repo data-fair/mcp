@@ -29,8 +29,8 @@ const getOrigin = (headers: IsomorphicHeaders | undefined): string => {
     return origin
   }
 }
-const buildAxiosOptions = (headers: IsomorphicHeaders | undefined): AxiosRequestConfig => ({
-  baseURL: getOrigin(headers) + '/data-fair/api/v1',
+const buildAxiosOptions = (headers: IsomorphicHeaders | undefined, defineBaseURL?: boolean): AxiosRequestConfig => ({
+  baseURL: defineBaseURL ? getOrigin(headers) + '/data-fair/api/v1' : undefined,
   headers: {
     'User-Agent': '@data-fair/mcp (Datasets)'
   }
@@ -76,7 +76,7 @@ const registerTools = (server: McpServer) => {
       // Fetch datasets matching the search criteria - optimized for discovery
       const fetchedData = (await axios.get(
         `/catalog/datasets?q=${params.query}&size=10&select=id,title,description`,
-        buildAxiosOptions(extra.requestInfo?.headers)
+        buildAxiosOptions(extra.requestInfo?.headers, true)
       )).data
 
       // Format the fetched data into a structured content object
@@ -163,7 +163,7 @@ const registerTools = (server: McpServer) => {
       // Fetch detailed dataset information
       const fetchedData = (await axios.get(
         `/datasets/${params.datasetId}`,
-        buildAxiosOptions(extra.requestInfo?.headers)
+        buildAxiosOptions(extra.requestInfo?.headers, true)
       )).data
 
       // Format the fetched data
@@ -211,7 +211,7 @@ const registerTools = (server: McpServer) => {
       // Add sample lines if available
       const sampleLines = (await axios.get(
         `/datasets/${params.datasetId}/lines?size=3`,
-        buildAxiosOptions(extra.requestInfo?.headers)
+        buildAxiosOptions(extra.requestInfo?.headers, true)
       )).data.results
       dataset.sampleLines = sampleLines
 
@@ -297,10 +297,11 @@ const registerTools = (server: McpServer) => {
 
       fetchParams.append('size', '10')
 
-      const fetchUrl = new URL(`datasets/${params.datasetId}/lines`)
+      const baseUrl = getOrigin(extra.requestInfo?.headers)
+      const fetchUrl = new URL(`/data-fair/api/v1/datasets/${params.datasetId}/lines`, baseUrl)
       fetchUrl.search = fetchParams.toString()
 
-      const filteredViewUrlObj = new URL(`${getOrigin(extra.requestInfo?.headers)}/data-fair/next-ui/embed/dataset/${params.datasetId}/table`)
+      const filteredViewUrlObj = new URL(`/data-fair/next-ui/embed/dataset/${params.datasetId}/table`, baseUrl)
       filteredViewUrlObj.search = viewParams.toString()
 
       // Fetch detailed dataset information
@@ -393,7 +394,7 @@ const registerTools = (server: McpServer) => {
         throw new Error('You can aggregate by at most 3 columns')
       }
 
-      const fetchUrl = new URL(`datasets/${params.datasetId}/values_agg`)
+      const fetchUrl = new URL(`/data-fair/api/v1/datasets/${params.datasetId}/values_agg`, getOrigin(extra.requestInfo?.headers))
 
       // Build common search parameters for both fetch and source URLs
       const aggsParams = new URLSearchParams()
