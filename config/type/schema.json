@@ -20,7 +20,8 @@
   "properties": {
     "portalUrl": {
       "type": "string",
-      "description": "The URL of the portal. By default, in http mode the host of the request is used."
+      "description": "Base URL of the Data Fair portal. If not set and transport=\"http\", the portal URL is inferred from the request origin. When transport=\"stdio\", you must set this value.",
+      "example": "https://opendata.koumoul.com"
     },
     "observer": {
       "type": "object",

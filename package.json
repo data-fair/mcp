@@ -1,7 +1,7 @@
 {
   "name": "@data-fair/mcp",
   "version": "0.0.0",
-  "description": "Model Context Protocol servers for the Data Fair ecosystem",
+  "description": "A Model Context Protocol server for the Data Fair ecosystem",
   "type": "module",
   "main": "index.ts",
   "scripts": {
