@@ -61,7 +61,7 @@ const registerTools = (server: McpServer) => {
           z.object({
             id: z.string().describe('Unique dataset ID (required for describe_dataset and search_data tools)'),
             title: z.string().describe('Dataset title'),
-            description: z.string().optional().describe('A markdown description of the dataset content'),
+            summary: z.string().optional().describe('A summary of the dataset content'),
             link: z.string().describe('Link to the dataset page (must be included in responses as citation source)'),
           })
         ).describe('An array of the top 10 datasets matching the full-text search criteria.')
@@ -75,7 +75,7 @@ const registerTools = (server: McpServer) => {
 
       // Fetch datasets matching the search criteria - optimized for discovery
       const fetchedData = (await axios.get(
-        `/catalog/datasets?q=${params.query}&size=10&select=id,title,description`,
+        `/catalog/datasets?q=${params.query}&size=10&select=id,title,summary`,
         buildAxiosOptions(extra.requestInfo?.headers, true)
       )).data
 
@@ -88,7 +88,7 @@ const registerTools = (server: McpServer) => {
             link: dataset.page
           }
 
-          if (dataset.description) result.description = dataset.description
+          if (dataset.summary) result.summary = dataset.summary
 
           return result
         }),
@@ -125,6 +125,7 @@ const registerTools = (server: McpServer) => {
         id: z.string().describe('Unique dataset Id (required for search_data tools)'),
         slug: z.string().optional().describe('Human-readable unique identifier for the dataset, used in URLs'),
         title: z.string().describe('Dataset title'),
+        summary: z.string().optional().describe('A brief summary of the dataset content'),
         description: z.string().optional().describe('A markdown description of the dataset content'),
         link: z.string().describe('Link to the dataset page (must be included in responses as citation source)'),
         count: z.number().describe('Total number of data rows in the dataset'),
@@ -176,6 +177,7 @@ const registerTools = (server: McpServer) => {
 
       // Add optional fields if they exist
       if (fetchedData.slug) dataset.slug = fetchedData.slug
+      if (fetchedData.summary) dataset.summary = fetchedData.summary
       if (fetchedData.description) dataset.description = fetchedData.description
       if (fetchedData.keywords) dataset.keywords = fetchedData.keywords
       if (fetchedData.origin) dataset.origin = fetchedData.origin
@@ -301,7 +303,7 @@ const registerTools = (server: McpServer) => {
       const fetchUrl = new URL(`/data-fair/api/v1/datasets/${params.datasetId}/lines`, baseUrl)
       fetchUrl.search = fetchParams.toString()
 
-      const filteredViewUrlObj = new URL(`/data-fair/next-ui/embed/dataset/${params.datasetId}/table`, baseUrl)
+      const filteredViewUrlObj = new URL(`/dataset/${params.datasetId}/full`, baseUrl)
       filteredViewUrlObj.search = viewParams.toString()
 
       // Fetch detailed dataset information
