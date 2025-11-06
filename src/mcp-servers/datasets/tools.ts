@@ -75,7 +75,7 @@ const registerTools = (server: McpServer) => {
 
       // Fetch datasets matching the search criteria - optimized for discovery
       const fetchedData = (await axios.get(
-        `/catalog/datasets?q=${params.query}&size=10&select=id,title,summary`,
+        `/catalog/datasets?q=${params.query}&size=20&select=id,title,summary`,
         buildAxiosOptions(extra.requestInfo?.headers, true)
       )).data
 
@@ -303,7 +303,7 @@ const registerTools = (server: McpServer) => {
       const fetchUrl = new URL(`/data-fair/api/v1/datasets/${params.datasetId}/lines`, baseUrl)
       fetchUrl.search = fetchParams.toString()
 
-      const filteredViewUrlObj = new URL(`/dataset/${params.datasetId}/full`, baseUrl)
+      const filteredViewUrlObj = new URL(`/datasets/${params.datasetId}/full`, baseUrl)
       filteredViewUrlObj.search = viewParams.toString()
 
       // Fetch detailed dataset information
