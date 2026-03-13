@@ -16,6 +16,8 @@
     "lint-fix": "eslint --fix .",
     "prepare": "husky || true",
     "check-types": "tsc",
+    "test": "NODE_ENV=test node --test --test-force-exit 'src/**/*.test.ts'",
+    "test:coverage": "NODE_ENV=test node --test --test-force-exit --experimental-test-coverage 'src/**/*.test.ts'",
     "quality": "npm run lint && npm run build-types && npm run check-types"
   },
   "author": "Alban Mouton <alban.mouton@gmail.com>",

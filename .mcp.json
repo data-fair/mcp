@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "data-fair-mcp": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "--watch",
+        "/home/alban/data-fair/mcp/index.ts"
+      ],
+      "env": {
+        "TRANSPORT": "stdio"
+      }
+    }
+  }
+}
