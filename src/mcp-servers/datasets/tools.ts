@@ -35,6 +35,7 @@ const buildAxiosOptions = (headers: IsomorphicHeaders | undefined, defineBaseURL
     'User-Agent': '@data-fair/mcp (Datasets)'
   }
 })
+const encodeDatasetId = (datasetId: string): string => encodeURIComponent(datasetId)
 
 /*
   * ==================================================================
@@ -51,7 +52,7 @@ const registerTools = (server: McpServer) => {
     'search_datasets',
     {
       title: 'Search Datasets',
-      description: 'Full-text search for datasets in DataFair. Uses French keywords to search across dataset titles, descriptions, and metadata. Returns a preview of datasets with their essential metadata: ID, title, description, and link to the dataset page that must be included in responses. Then use describe_dataset to get detailed metadata.',
+      description: 'Full-text search for datasets by French keywords. Returns matching datasets with ID, title, summary, and page link.',
       inputSchema: {
         query: z.string().min(3, 'Search term must be at least 3 characters long').describe('French keywords for full-text search (simple keywords, not sentences). Examples: "élus", "DPE", "entreprises", "logement social"')
       },
@@ -64,7 +65,7 @@ const registerTools = (server: McpServer) => {
             summary: z.string().optional().describe('A summary of the dataset content'),
             link: z.string().describe('Link to the dataset page (must be included in responses as citation source)'),
           })
-        ).describe('An array of the top 10 datasets matching the full-text search criteria.')
+        ).describe('An array of the top 20 datasets matching the full-text search criteria.')
       },
       annotations: { // https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations
         readOnlyHint: true
@@ -117,7 +118,7 @@ const registerTools = (server: McpServer) => {
     'describe_dataset',
     {
       title: 'Describe Dataset',
-      description: 'Retrieve detailed metadata for a dataset by its ID including column schema, spatial/temporal coverage, and other metadata. Use this to understand dataset structure after finding it with search_datasets and before searching data with search_data.',
+      description: 'Get detailed metadata for a dataset: column schema, sample rows, license, spatial/temporal coverage.',
       inputSchema: {
         datasetId: z.string().describe('The unique dataset ID obtained from search_datasets or provided by the user')
       },
@@ -163,7 +164,7 @@ const registerTools = (server: McpServer) => {
 
       // Fetch detailed dataset information
       const fetchedData = (await axios.get(
-        `/datasets/${params.datasetId}`,
+        `/datasets/${encodeDatasetId(params.datasetId)}`,
         buildAxiosOptions(extra.requestInfo?.headers, true)
       )).data
 
@@ -212,7 +213,7 @@ const registerTools = (server: McpServer) => {
 
       // Add sample lines if available
       const sampleLines = (await axios.get(
-        `/datasets/${params.datasetId}/lines?size=3`,
+        `/datasets/${encodeDatasetId(params.datasetId)}/lines?size=3`,
         buildAxiosOptions(extra.requestInfo?.headers, true)
       )).data.results
       dataset.sampleLines = sampleLines
@@ -229,13 +230,17 @@ const registerTools = (server: McpServer) => {
     }
   )
 
-  /** zod schema for filters */
+  /**
+   * Zod schema for filters.
+   * Available suffixes are defined in the main data-fair project:
+   * see data-fair/api/src/datasets/es/commons.js (filterItem function)
+   */
   const filtersSchema = z.record(
-    z.string().regex(/^.+_(search|eq|in|gte?|lte?|n?exists)$/, {
-      message: 'Filter key must follow pattern: column_key + suffix (_eq, _search, _in, _gte, _gt, _lte, _lt, _exists, _nexists)'
+    z.string().regex(/^.+_(search|eq|neq|in|nin|starts|contains|gte?|lte?|n?exists)$/, {
+      message: 'Filter key must follow pattern: column_key + suffix (_eq, _neq, _search, _in, _nin, _starts, _contains, _gte, _gt, _lte, _lt, _exists, _nexists)'
     }),
     z.string()
-  ).optional().describe('Precise filters on specific columns. This applies to each row individually. Each filter key must be: column_key + suffix. Available suffixes: _eq (strictly equal, case-sensitive), _in (value must be in the list, case-sensitive, values separated by a comma), _search (full-text search within that column, case-insensitive and flexible matching), _gte (greater than or equal), _gt (greater than), _lte (less than or equal), _lt (less than), _exists (exists), and _nexists (does not exist). Use column keys from describe_dataset. Example: { "nom_search": "Jean", "age_lte": "30", "ville_eq": "Paris", "code_in": "A,B,C" } searches for people whose names contain "Jean", who are 30 years old or younger, who live in Paris, and whose code is A, B, or C.')
+  ).optional().describe('Column filters as key-value pairs. Key format: column_key + suffix (see server instructions for available suffixes). Example: { "nom_search": "Jean", "age_lte": "30", "ville_eq": "Paris" }')
 
   /**
    * Tool to search for specific data rows within a dataset using either full-text search OR precise filters.
@@ -253,7 +258,7 @@ const registerTools = (server: McpServer) => {
     'search_data',
     {
       title: 'Search data from a dataset',
-      description: 'Search for data rows in a specific dataset using either :\n- Full-text search across all columns (query) for quick, broad matches\n- Precise filtering (filters) to apply exact conditions, comparisons, or column-specific searches.\nUse filters whenever your question involves multiple criteria or numerical/date ranges, as they yield more relevant and targeted results. The query parameter is better suited for simple, one-keyword searches across the entire dataset. Returns matching rows with relevance scores and some metadata. Always include the filtered view link, the dataset link and the license information when presenting results to users. Use describe_dataset first to understand the data structure.',
+      description: 'Search for data rows in a dataset using full-text search (query) or precise column filters. Returns matching rows and a filtered view URL.',
       inputSchema: {
         datasetId: z.string().describe('The unique dataset ID obtained from search_datasets or provided by the user'),
         query: z.string().optional().describe('French keywords for full-text search across all dataset columns (simple keywords, not sentences). Do not use with filters parameter. Examples: "Jean Dupont", "Paris", "2025"'),
@@ -300,10 +305,10 @@ const registerTools = (server: McpServer) => {
       fetchParams.append('size', '10')
 
       const baseUrl = getOrigin(extra.requestInfo?.headers)
-      const fetchUrl = new URL(`/data-fair/api/v1/datasets/${params.datasetId}/lines`, baseUrl)
+      const fetchUrl = new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/lines`, baseUrl)
       fetchUrl.search = fetchParams.toString()
 
-      const filteredViewUrlObj = new URL(`/datasets/${params.datasetId}/full`, baseUrl)
+      const filteredViewUrlObj = new URL(`/datasets/${encodeDatasetId(params.datasetId)}/full`, baseUrl)
       filteredViewUrlObj.search = viewParams.toString()
 
       // Fetch detailed dataset information
@@ -361,7 +366,7 @@ const registerTools = (server: McpServer) => {
     'aggregate_data',
     {
       title: 'Aggregate data from a dataset',
-      description: 'Perform aggregations on dataset columns, such as counting unique values, summing numeric columns, or calculating averages. Use this after describe_dataset to understand the dataset structure and available column keys. Example: {"datasetId": "123", "aggregationColumns": ["code_sexe", "region"], "aggregation": {"column": "age", "metric": "avg"}} this will return the average age grouped by code_sexe and region. Aggregation is limited to a maximum of 3 columns.',
+      description: 'Aggregate dataset rows by 1-3 columns with optional metrics (sum, avg, min, max, count). Defaults to counting unique values.',
       inputSchema: {
         datasetId: z.string().describe('The unique dataset ID obtained from search_datasets tool'),
         aggregationColumns: z.array(z.string())
@@ -396,7 +401,7 @@ const registerTools = (server: McpServer) => {
         throw new Error('You can aggregate by at most 3 columns')
       }
 
-      const fetchUrl = new URL(`/data-fair/api/v1/datasets/${params.datasetId}/values_agg`, getOrigin(extra.requestInfo?.headers))
+      const fetchUrl = new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/values_agg`, getOrigin(extra.requestInfo?.headers))
 
       // Build common search parameters for both fetch and source URLs
       const aggsParams = new URLSearchParams()

@@ -27,8 +27,6 @@
     "node": "v24"
   },
   "dependencies": {
-    "@commitlint/cli": "^19.8.1",
-    "@commitlint/config-conventional": "^19.8.1",
     "@data-fair/lib-express": "^1.20.5",
     "@data-fair/lib-node": "^2.8.2",
     "@data-fair/lib-types-builder": "^1.8.2",
@@ -41,6 +39,8 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
     "@modelcontextprotocol/inspector": "^0.16.2",
     "@types/config": "^3.3.5",
     "@types/debug": "^4.1.12",
