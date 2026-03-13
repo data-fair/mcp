@@ -12,6 +12,19 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 export function createMCPRouter (mcpServer: McpServer): Router {
   const router = Router()
 
+  // CORS support for browser-based MCP clients
+  router.use((req: Request, res: Response, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept')
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Type')
+    if (req.method === 'OPTIONS') {
+      res.status(204).end()
+      return
+    }
+    next()
+  })
+
   // Store transports for legacy SSE clients
   const sseTransports: Record<string, SSEServerTransport> = {}
 
