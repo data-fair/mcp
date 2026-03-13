@@ -13,6 +13,7 @@
   "type": "object",
   "title": "Api config",
   "required": [
+    "defaultLimits",
     "observer",
     "port",
     "transport"
@@ -30,6 +31,27 @@
     "ignoreRateLimiting": {
       "type": "string",
       "description": "Secret key sent to Data Fair to bypass rate limiting constraints. Used in stack mode."
+    },
+    "defaultLimits": {
+      "type": "object",
+      "description": "Default rate limiting configuration for the MCP server front-facing API.",
+      "properties": {
+        "apiRate": {
+          "type": "object",
+          "properties": {
+            "duration": {
+              "type": "number",
+              "description": "Duration of the rate limiting window in seconds.",
+              "default": 60
+            },
+            "nb": {
+              "type": "number",
+              "description": "Maximum number of requests allowed per duration window.",
+              "default": 100
+            }
+          }
+        }
+      }
     },
     "observer": {
       "type": "object",
