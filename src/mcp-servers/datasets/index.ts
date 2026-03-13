@@ -20,9 +20,13 @@ const server = new McpServer({
 ## Workflow
 1. **search_datasets** — find relevant datasets using French keywords (simple terms, not sentences).
 2. **describe_dataset** — get the schema, sample rows, and metadata for a dataset. Always do this before querying data.
-3. **search_data** or **aggregate_data** — query or aggregate rows using column keys from the schema.
+3. Use the appropriate tool(s) depending on the question:
+   - **search_data** — find specific rows matching a query or filters.
+   - **aggregate_data** — group rows by 1-3 columns with optional metrics.
+   - **get_field_values** — list distinct values of a column (useful before filtering to know what values exist).
+   - **calculate_metric** — compute a single metric (avg, sum, min, max, cardinality, percentiles, etc.) on a column, optionally with filters.
 
-## Filters (search_data & aggregate_data)
+## Filters (search_data, aggregate_data & calculate_metric)
 Filters are key-value pairs where the key is \`column_key\` + a suffix:
 - \`_eq\` / \`_neq\`: exact match / not equal (case-sensitive)
 - \`_in\` / \`_nin\`: value in / not in comma-separated list (case-sensitive)
@@ -33,6 +37,7 @@ Filters are key-value pairs where the key is \`column_key\` + a suffix:
 
 Prefer filters over the \`query\` parameter when the question involves multiple criteria or numeric/date ranges.
 Use sample rows from describe_dataset to understand exact value formatting before filtering.
+Use get_field_values to discover possible values before applying _eq or _in filters.
 
 ## Citations
 Always include in your responses:

@@ -468,6 +468,148 @@ const registerTools = (server: McpServer) => {
       }
     }
   )
+  /**
+   * Tool to list distinct values of a specific column in a dataset.
+   * Useful for understanding the range of values in a column, populating filters,
+   * or checking what values exist before applying filters.
+   * @param {string} datasetId - The unique dataset ID
+   * @param {string} fieldKey - The column key to get values for
+   * @param {string} query - Optional text to filter values (prefix match)
+   * @param {string} sort - Sort order: 'asc' or 'desc'
+   * @param {number} size - Number of values to return (max 1000)
+   */
+  server.registerTool(
+    'get_field_values',
+    {
+      title: 'Get distinct values of a dataset column',
+      description: 'List distinct values of a specific column. Useful to discover what values exist before filtering, or to populate a filter list.',
+      inputSchema: {
+        datasetId: z.string().describe('The unique dataset ID obtained from search_datasets or provided by the user'),
+        fieldKey: z.string().describe('The column key to get values for (use keys from describe_dataset)'),
+        query: z.string().optional().describe('Optional text to filter values (prefix/substring match within this column)'),
+        sort: z.enum(['asc', 'desc']).optional().describe('Sort order for the values (default: asc)'),
+        size: z.number().min(1).max(1000).optional().describe('Number of values to return (default: 10, max: 1000)')
+      },
+      outputSchema: {
+        datasetId: z.string().describe('The dataset ID that was queried'),
+        fieldKey: z.string().describe('The column key that was queried'),
+        values: z.array(z.union([z.string(), z.number()])).describe('Array of distinct values for the specified column')
+      },
+      annotations: {
+        readOnlyHint: true
+      }
+    },
+    async (params: { datasetId: string, fieldKey: string, query?: string, sort?: 'asc' | 'desc', size?: number }, extra) => {
+      debug('Executing get_field_values tool with dataset:', params.datasetId, 'field:', params.fieldKey)
+
+      const fetchParams = new URLSearchParams()
+      if (params.query) fetchParams.append('q', params.query)
+      if (params.sort) fetchParams.append('sort', params.sort)
+      fetchParams.append('size', String(params.size ?? 10))
+
+      const fetchUrl = new URL(
+        `/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/values/${encodeURIComponent(params.fieldKey)}`,
+        getOrigin(extra.requestInfo?.headers)
+      )
+      fetchUrl.search = fetchParams.toString()
+
+      const values = (await axios.get(
+        fetchUrl.toString(),
+        buildAxiosOptions(extra.requestInfo?.headers)
+      )).data
+
+      const structuredContent = {
+        datasetId: params.datasetId,
+        fieldKey: params.fieldKey,
+        values
+      }
+
+      return {
+        structuredContent,
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(structuredContent)
+          }
+        ]
+      }
+    }
+  )
+
+  /**
+   * Tool to calculate a single metric (sum, avg, min, max, etc.) on a dataset column.
+   * @param {string} datasetId - The unique dataset ID
+   * @param {string} fieldKey - The column to calculate the metric on
+   * @param {string} metric - The metric to calculate
+   */
+  server.registerTool(
+    'calculate_metric',
+    {
+      title: 'Calculate a metric on a dataset column',
+      description: 'Calculate a single metric (avg, sum, min, max, stats, value_count, cardinality, percentiles) on a dataset column. Supports filters to restrict the calculation to a subset of rows.',
+      inputSchema: {
+        datasetId: z.string().describe('The unique dataset ID obtained from search_datasets or provided by the user'),
+        fieldKey: z.string().describe('The column key to calculate the metric on (use keys from describe_dataset)'),
+        metric: z.enum(['avg', 'sum', 'min', 'max', 'stats', 'value_count', 'cardinality', 'percentiles'])
+          .describe('Metric to calculate. Available: avg, sum, min, max (for numbers); min, max, cardinality, value_count (for strings); value_count (for others); stats returns count/min/max/avg/sum; percentiles returns distribution.'),
+        percents: z.string().optional().describe('Comma-separated percentages for percentiles metric (default: "1,5,25,50,75,95,99"). Only used when metric is "percentiles".'),
+        filters: filtersSchema
+      },
+      outputSchema: {
+        datasetId: z.string().describe('The dataset ID that was queried'),
+        fieldKey: z.string().describe('The column key that was queried'),
+        metric: z.string().describe('The metric that was calculated'),
+        total: z.number().describe('Total number of rows included in the calculation'),
+        value: z.any().describe('The calculated metric value (number for most metrics, object for stats/percentiles)')
+      },
+      annotations: {
+        readOnlyHint: true
+      }
+    },
+    async (params: { datasetId: string, fieldKey: string, metric: string, percents?: string, filters?: Record<string, string> }, extra) => {
+      debug('Executing calculate_metric tool with dataset:', params.datasetId, 'field:', params.fieldKey, 'metric:', params.metric)
+
+      const fetchParams = new URLSearchParams()
+      fetchParams.append('metric', params.metric)
+      fetchParams.append('field', params.fieldKey)
+      if (params.percents) fetchParams.append('percents', params.percents)
+
+      if (params.filters) {
+        for (const [key, value] of Object.entries(params.filters)) {
+          fetchParams.append(key, String(value))
+        }
+      }
+
+      const fetchUrl = new URL(
+        `/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/metric_agg`,
+        getOrigin(extra.requestInfo?.headers)
+      )
+      fetchUrl.search = fetchParams.toString()
+
+      const response = (await axios.get(
+        fetchUrl.toString(),
+        buildAxiosOptions(extra.requestInfo?.headers)
+      )).data
+
+      const structuredContent = {
+        datasetId: params.datasetId,
+        fieldKey: params.fieldKey,
+        metric: params.metric,
+        total: response.total,
+        value: response.metric
+      }
+
+      return {
+        structuredContent,
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(structuredContent)
+          }
+        ]
+      }
+    }
+  )
 }
 
 export default registerTools
