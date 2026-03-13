@@ -34,22 +34,19 @@ export default (server: McpServer) => {
     async (params: { datasetId: string, fieldKey: string, metric: string, percents?: string, filters?: Record<string, string> }, extra) => {
       debug('Executing calculate_metric tool with dataset:', params.datasetId, 'field:', params.fieldKey, 'metric:', params.metric)
 
-      const fetchParams = new URLSearchParams()
-      fetchParams.append('metric', params.metric)
-      fetchParams.append('field', params.fieldKey)
-      if (params.percents) fetchParams.append('percents', params.percents)
-
-      if (params.filters) {
-        for (const [key, value] of Object.entries(params.filters)) {
-          fetchParams.append(key, String(value))
-        }
-      }
-
       const fetchUrl = new URL(
         `/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/metric_agg`,
         getOrigin(extra.requestInfo?.headers)
       )
-      fetchUrl.search = fetchParams.toString()
+      fetchUrl.searchParams.set('metric', params.metric)
+      fetchUrl.searchParams.set('field', params.fieldKey)
+      if (params.percents) fetchUrl.searchParams.set('percents', params.percents)
+
+      if (params.filters) {
+        for (const [key, value] of Object.entries(params.filters)) {
+          fetchUrl.searchParams.set(key, String(value))
+        }
+      }
 
       const response = (await axios.get(
         fetchUrl.toString(),

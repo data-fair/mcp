@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
-import { buildAxiosOptions } from './_utils.ts'
+import { getOrigin, buildAxiosOptions } from './_utils.ts'
 
 const debug = Debug('datasets-tools')
 
@@ -33,9 +33,14 @@ export default (server: McpServer) => {
     async (params: { query: string }, extra) => {
       debug('Executing search_dataset tool with query:', params.query)
 
+      const fetchUrl = new URL('/data-fair/api/v1/catalog/datasets', getOrigin(extra.requestInfo?.headers))
+      fetchUrl.searchParams.set('q', params.query)
+      fetchUrl.searchParams.set('size', '20')
+      fetchUrl.searchParams.set('select', 'id,title,summary')
+
       const fetchedData = (await axios.get(
-        `/catalog/datasets?q=${params.query}&size=20&select=id,title,summary`,
-        buildAxiosOptions(extra.requestInfo?.headers, true)
+        fetchUrl.toString(),
+        buildAxiosOptions(extra.requestInfo?.headers)
       )).data
 
       const structuredContent = {

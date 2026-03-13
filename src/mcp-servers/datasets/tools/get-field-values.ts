@@ -31,16 +31,13 @@ export default (server: McpServer) => {
     async (params: { datasetId: string, fieldKey: string, query?: string, sort?: 'asc' | 'desc', size?: number }, extra) => {
       debug('Executing get_field_values tool with dataset:', params.datasetId, 'field:', params.fieldKey)
 
-      const fetchParams = new URLSearchParams()
-      if (params.query) fetchParams.append('q', params.query)
-      if (params.sort) fetchParams.append('sort', params.sort)
-      fetchParams.append('size', String(params.size ?? 10))
-
       const fetchUrl = new URL(
         `/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/values/${encodeURIComponent(params.fieldKey)}`,
         getOrigin(extra.requestInfo?.headers)
       )
-      fetchUrl.search = fetchParams.toString()
+      if (params.query) fetchUrl.searchParams.set('q', params.query)
+      if (params.sort) fetchUrl.searchParams.set('sort', params.sort)
+      fetchUrl.searchParams.set('size', String(params.size ?? 10))
 
       const values = (await axios.get(
         fetchUrl.toString(),

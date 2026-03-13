@@ -25,7 +25,7 @@ export const getOrigin = (headers: IsomorphicHeaders | undefined): string => {
   }
 }
 
-export const buildAxiosOptions = (headers: IsomorphicHeaders | undefined, defineBaseURL?: boolean): AxiosRequestConfig => {
+export const buildAxiosOptions = (headers: IsomorphicHeaders | undefined): AxiosRequestConfig => {
   const axiosHeaders: Record<string, string> = {
     'User-Agent': '@data-fair/mcp (Datasets)'
   }
@@ -36,7 +36,6 @@ export const buildAxiosOptions = (headers: IsomorphicHeaders | undefined, define
     axiosHeaders['x-ignore-rate-limiting'] = config.ignoreRateLimiting
   }
   return {
-    baseURL: defineBaseURL ? getOrigin(headers) + '/data-fair/api/v1' : undefined,
     headers: axiosHeaders
   }
 }

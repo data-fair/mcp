@@ -179,6 +179,83 @@ describe('search_data', () => {
     assert.equal(content.count, 1)
   })
 
+  it('should pass custom size parameter', async () => {
+    routes['/datasets/ds1/lines'] = (url) => {
+      assert.equal(url.searchParams.get('size'), '30')
+      return { total: 50, results: [{ nom: 'ACME' }] }
+    }
+
+    await client.callTool({
+      name: 'search_data',
+      arguments: { datasetId: 'ds1', query: 'test', size: 30 }
+    })
+  })
+
+  it('should cap size at 50', async () => {
+    routes['/datasets/ds1/lines'] = (url) => {
+      assert.equal(url.searchParams.get('size'), '50')
+      return { total: 100, results: [{ nom: 'ACME' }] }
+    }
+
+    await client.callTool({
+      name: 'search_data',
+      arguments: { datasetId: 'ds1', query: 'test', size: 200 }
+    })
+  })
+
+  it('should return next URL when API provides one', async () => {
+    routes['/datasets/ds1/lines'] = (url) => ({
+      total: 25,
+      results: [{ nom: 'ACME', ville: 'Paris' }],
+      next: 'http://localhost/data-fair/api/v1/datasets/ds1/lines?size=10&after=abc123'
+    })
+
+    const result = await client.callTool({
+      name: 'search_data',
+      arguments: { datasetId: 'ds1', query: 'ACME' }
+    })
+    const content = JSON.parse((result.content as any)[0].text)
+
+    assert.equal(content.next, 'http://localhost/data-fair/api/v1/datasets/ds1/lines?size=10&after=abc123')
+  })
+
+  it('should not include next when API does not provide one', async () => {
+    routes['/datasets/ds1/lines'] = (url) => ({
+      total: 1,
+      results: [{ nom: 'ACME', ville: 'Paris' }]
+    })
+
+    const result = await client.callTool({
+      name: 'search_data',
+      arguments: { datasetId: 'ds1', query: 'ACME' }
+    })
+    const content = JSON.parse((result.content as any)[0].text)
+
+    assert.equal(content.next, undefined)
+  })
+
+  it('should fetch directly from next URL when provided', async () => {
+    const addr = fakeApi.address() as import('node:net').AddressInfo
+    const nextUrl = `http://localhost:${addr.port}/data-fair/api/v1/datasets/ds1/lines?size=10&after=abc123`
+
+    routes['/datasets/ds1/lines'] = (url) => {
+      assert.equal(url.searchParams.get('after'), 'abc123')
+      return {
+        total: 25,
+        results: [{ nom: 'Globex', ville: 'Lyon' }]
+      }
+    }
+
+    const result = await client.callTool({
+      name: 'search_data',
+      arguments: { datasetId: 'ds1', next: nextUrl }
+    })
+    const content = JSON.parse((result.content as any)[0].text)
+
+    assert.equal(content.lines[0].nom, 'Globex')
+    assert.equal(content.count, 25)
+  })
+
   it('should pass select parameter', async () => {
     routes['/datasets/ds1/lines'] = (url) => {
       assert.ok(url.searchParams.get('select')?.includes('nom'))

@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
-import { buildAxiosOptions, encodeDatasetId } from './_utils.ts'
+import { getOrigin, buildAxiosOptions, encodeDatasetId } from './_utils.ts'
 
 const debug = Debug('datasets-tools')
 
@@ -55,9 +55,11 @@ export default (server: McpServer) => {
     async (params: { datasetId: string }, extra) => {
       debug('Executing describe_dataset tool with datasetId:', params.datasetId)
 
+      const baseUrl = getOrigin(extra.requestInfo?.headers)
+
       const fetchedData = (await axios.get(
-        `/datasets/${encodeDatasetId(params.datasetId)}`,
-        buildAxiosOptions(extra.requestInfo?.headers, true)
+        new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}`, baseUrl).toString(),
+        buildAxiosOptions(extra.requestInfo?.headers)
       )).data
 
       const dataset: any = {
@@ -99,9 +101,12 @@ export default (server: McpServer) => {
           })
       }
 
+      const sampleUrl = new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/lines`, baseUrl)
+      sampleUrl.searchParams.set('size', '3')
+
       const sampleLines = (await axios.get(
-        `/datasets/${encodeDatasetId(params.datasetId)}/lines?size=3`,
-        buildAxiosOptions(extra.requestInfo?.headers, true)
+        sampleUrl.toString(),
+        buildAxiosOptions(extra.requestInfo?.headers)
       )).data.results
       dataset.sampleLines = sampleLines
 

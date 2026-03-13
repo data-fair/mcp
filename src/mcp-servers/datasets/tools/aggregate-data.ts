@@ -57,20 +57,17 @@ export default (server: McpServer) => {
 
       const fetchUrl = new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/values_agg`, getOrigin(extra.requestInfo?.headers))
 
-      const aggsParams = new URLSearchParams()
-      aggsParams.append('field', params.aggregationColumns.slice(0, 3).join(';'))
+      fetchUrl.searchParams.set('field', params.aggregationColumns.slice(0, 3).join(';'))
       if (params.aggregation && params.aggregation.metric !== 'count') {
-        aggsParams.append('metric', params.aggregation.metric)
-        aggsParams.append('metric_field', params.aggregation.column)
+        fetchUrl.searchParams.set('metric', params.aggregation.metric)
+        fetchUrl.searchParams.set('metric_field', params.aggregation.column)
       }
 
       if (params.filters) {
         for (const [key, value] of Object.entries(params.filters)) {
-          aggsParams.append(key, value)
+          fetchUrl.searchParams.set(key, value)
         }
       }
-
-      fetchUrl.search = aggsParams.toString()
 
       const response = (await axios.get(
         fetchUrl.toString(),

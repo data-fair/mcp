@@ -16,7 +16,9 @@ export default (server: McpServer) => {
         datasetId: z.string().describe('The unique dataset ID obtained from search_datasets or provided by the user'),
         query: z.string().optional().describe('French keywords for full-text search across all dataset columns (simple keywords, not sentences). Do not use with filters parameter. Examples: "Jean Dupont", "Paris", "2025"'),
         filters: filtersSchema,
-        select: z.string().optional().describe('Optional comma-separated list of column keys to include in the results. Useful when the dataset has many columns to reduce output size. If not provided, all columns are returned. Use column keys from describe_dataset. Format: column1,column2,column3 (No spaces after commas). Example: "nom,age,ville"')
+        select: z.string().optional().describe('Optional comma-separated list of column keys to include in the results. Useful when the dataset has many columns to reduce output size. If not provided, all columns are returned. Use column keys from describe_dataset. Format: column1,column2,column3 (No spaces after commas). Example: "nom,age,ville"'),
+        size: z.number().optional().describe('Number of rows to return per page (default: 10, max: 50). Increase when you know you need more results upfront to avoid multiple pagination round-trips.'),
+        next: z.string().optional().describe('URL from a previous search_data response to fetch the next page of results. When provided, all other parameters (query, filters, select, size) are ignored since the URL already contains them.')
       },
       outputSchema: {
         datasetId: z.string().describe('The dataset ID that was searched'),
@@ -24,56 +26,73 @@ export default (server: McpServer) => {
         filteredViewUrl: z.string().describe('Link to view the filtered dataset results in table format (must be included in responses for citation and direct access to filtered view)'),
         lines: z.array(
           z.record(z.any()).describe('Data row object containing column keys as object keys with their values, plus _score field indicating search relevance (higher score = more relevant)')
-        ).describe('An array of the top 10 data rows matching the search criteria.')
+        ).describe('An array of data rows matching the search criteria (up to the requested size).'),
+        next: z.string().optional().describe('URL to fetch the next page of results. Absent when there are no more results. Pass this value as the next input parameter to get the next page.')
       },
       annotations: {
         readOnlyHint: true
       }
     },
-    async (params: { datasetId: string, query?: string, select?: string, filters?: Record<string, any> }, extra) => {
-      debug('Executing search_data tool with dataset:', params.datasetId, 'query:', params.query, 'select:', params.select, 'filters:', params.filters)
+    async (params: { datasetId: string, query?: string, select?: string, filters?: Record<string, any>, size?: number, next?: string }, extra) => {
+      debug('Executing search_data tool with dataset:', params.datasetId, 'query:', params.query, 'select:', params.select, 'filters:', params.filters, 'size:', params.size, 'next:', params.next)
 
-      const fetchParams = new URLSearchParams()
-      const viewParams = new URLSearchParams()
-
-      if (params.query) {
-        fetchParams.append('q', params.query)
-        fetchParams.append('q_mode', 'complete')
-        viewParams.append('q', params.query)
-        viewParams.append('q_mode', 'complete')
-      }
-
-      if (params.filters) {
-        for (const [key, value] of Object.entries(params.filters)) {
-          fetchParams.append(key, String(value))
-          viewParams.append(key, String(value))
-        }
-      }
-
-      if (params.select) {
-        fetchParams.append('select', params.select)
-        viewParams.append('cols', params.select)
-      }
-
-      fetchParams.append('size', '10')
-
+      let fetchUrlStr: string
       const baseUrl = getOrigin(extra.requestInfo?.headers)
-      const fetchUrl = new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/lines`, baseUrl)
-      fetchUrl.search = fetchParams.toString()
+
+      if (params.next) {
+        fetchUrlStr = params.next
+      } else {
+        const fetchUrl = new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/lines`, baseUrl)
+
+        if (params.query) {
+          fetchUrl.searchParams.set('q', params.query)
+          fetchUrl.searchParams.set('q_mode', 'complete')
+        }
+
+        if (params.filters) {
+          for (const [key, value] of Object.entries(params.filters)) {
+            fetchUrl.searchParams.set(key, String(value))
+          }
+        }
+
+        if (params.select) {
+          fetchUrl.searchParams.set('select', params.select)
+        }
+
+        const size = Math.min(Math.max(params.size || 10, 1), 50)
+        fetchUrl.searchParams.set('size', String(size))
+
+        fetchUrlStr = fetchUrl.toString()
+      }
 
       const filteredViewUrlObj = new URL(`/datasets/${encodeDatasetId(params.datasetId)}/full`, baseUrl)
-      filteredViewUrlObj.search = viewParams.toString()
+      if (params.query) {
+        filteredViewUrlObj.searchParams.set('q', params.query)
+        filteredViewUrlObj.searchParams.set('q_mode', 'complete')
+      }
+      if (params.filters) {
+        for (const [key, value] of Object.entries(params.filters)) {
+          filteredViewUrlObj.searchParams.set(key, String(value))
+        }
+      }
+      if (params.select) {
+        filteredViewUrlObj.searchParams.set('cols', params.select)
+      }
 
       const response = (await axios.get(
-        fetchUrl.toString(),
+        fetchUrlStr,
         buildAxiosOptions(extra.requestInfo?.headers)
       )).data
 
-      const structuredContent = {
+      const structuredContent: Record<string, any> = {
         datasetId: params.datasetId,
         count: response.total,
         filteredViewUrl: filteredViewUrlObj.toString(),
         lines: response.results
+      }
+
+      if (response.next) {
+        structuredContent.next = response.next
       }
 
       return {
