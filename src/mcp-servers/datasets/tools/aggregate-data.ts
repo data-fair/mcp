@@ -51,13 +51,9 @@ export default (server: McpServer) => {
     async (params: { datasetId: string, aggregationColumns: string[], aggregation?: { column: string, metric: 'sum' | 'avg' | 'min' | 'max' | 'count' }, filters?: Record<string, string> }, extra) => {
       debug('Executing aggregate_data tool with dataset:', params.datasetId, 'columns:', params.aggregationColumns, 'aggregation:', JSON.stringify(params.aggregation))
 
-      if (params.aggregationColumns.length > 3) {
-        throw new Error('You can aggregate by at most 3 columns')
-      }
-
       const fetchUrl = new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/values_agg`, getOrigin(extra.requestInfo?.headers))
 
-      fetchUrl.searchParams.set('field', params.aggregationColumns.slice(0, 3).join(';'))
+      fetchUrl.searchParams.set('field', params.aggregationColumns.join(';'))
       if (params.aggregation && params.aggregation.metric !== 'count') {
         fetchUrl.searchParams.set('metric', params.aggregation.metric)
         fetchUrl.searchParams.set('metric_field', params.aggregation.column)

@@ -12,11 +12,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 export function createMCPRouter (mcpServer: McpServer): Router {
   const router = Router()
 
-  // Store transports for this specific MCP server instance
-  const transports = {
-    streamable: {} as Record<string, StreamableHTTPServerTransport>,
-    sse: {} as Record<string, SSEServerTransport>
-  }
+  // Store transports for legacy SSE clients
+  const sseTransports: Record<string, SSEServerTransport> = {}
 
   // -------------- Streamable HTTP Server Transport --------------
   // Handle POST requests for client-to-server communication
@@ -27,7 +24,6 @@ export function createMCPRouter (mcpServer: McpServer): Router {
       })
       res.on('close', () => {
         transport.close()
-        mcpServer.close()
       })
       await mcpServer.connect(transport)
       await transport.handleRequest(req, res, req.body)
@@ -67,10 +63,10 @@ export function createMCPRouter (mcpServer: McpServer): Router {
   // -------------- Legacy Endpoints for SSE older clients --------------
   router.get('/sse', async (req: Request, res: Response) => {
     const transport = new SSEServerTransport('/messages', res)
-    transports.sse[transport.sessionId] = transport
+    sseTransports[transport.sessionId] = transport
 
     res.on('close', () => {
-      delete transports.sse[transport.sessionId]
+      delete sseTransports[transport.sessionId]
     })
 
     await mcpServer.connect(transport)
@@ -78,7 +74,7 @@ export function createMCPRouter (mcpServer: McpServer): Router {
 
   router.post('/messages', async (req: Request, res: Response) => {
     const sessionId = req.query.sessionId as string
-    const transport = transports.sse[sessionId]
+    const transport = sseTransports[sessionId]
     if (transport) {
       await transport.handlePostMessage(req, res, req.body)
     } else {

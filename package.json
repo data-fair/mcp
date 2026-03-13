@@ -18,7 +18,7 @@
     "check-types": "tsc",
     "test": "NODE_ENV=test node --test --test-force-exit 'src/**/*.test.ts'",
     "test:coverage": "NODE_ENV=test node --test --test-force-exit --experimental-test-coverage 'src/**/*.test.ts'",
-    "quality": "npm run lint && npm run build-types && npm run check-types"
+    "quality": "npm run lint && npm run build-types && npm run check-types && npm run test"
   },
   "author": "Alban Mouton <alban.mouton@gmail.com>",
   "license": "AGPL-3.0-only",

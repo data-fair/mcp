@@ -36,7 +36,8 @@ export const buildAxiosOptions = (headers: IsomorphicHeaders | undefined): Axios
     axiosHeaders['x-ignore-rate-limiting'] = config.ignoreRateLimiting
   }
   return {
-    headers: axiosHeaders
+    headers: axiosHeaders,
+    timeout: 30_000
   }
 }
 

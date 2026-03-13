@@ -40,6 +40,11 @@ export default (server: McpServer) => {
       const baseUrl = getOrigin(extra.requestInfo?.headers)
 
       if (params.next) {
+        const nextUrl = new URL(params.next)
+        const expectedOrigin = new URL(baseUrl).origin
+        if (nextUrl.origin !== expectedOrigin) {
+          throw new Error(`Invalid next URL origin: expected ${expectedOrigin}, got ${nextUrl.origin}`)
+        }
         fetchUrlStr = params.next
       } else {
         const fetchUrl = new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/lines`, baseUrl)

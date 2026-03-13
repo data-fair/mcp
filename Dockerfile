@@ -50,7 +50,6 @@ RUN npm ci --prefer-offline --omit=dev --omit=optional --omit=peer --no-audit --
 # =============================
 FROM base AS main
 
-COPY --from=server-installer /app/node_modules node_modules
 ADD /src src
 ADD /index.ts index.ts
 COPY --from=types /app/config config
