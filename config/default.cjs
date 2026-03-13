@@ -1,5 +1,7 @@
 module.exports = {
   portalUrl: undefined,
+  dataFairAPIKey: undefined,
+  ignoreRateLimiting: undefined,
   observer: {
     active: true
   },

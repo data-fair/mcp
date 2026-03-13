@@ -20,8 +20,16 @@
   "properties": {
     "portalUrl": {
       "type": "string",
-      "description": "Base URL of the Data Fair portal. If not set and transport=\"http\", the portal URL is inferred from the request origin. When transport=\"stdio\", you must set this value.",
+      "description": "Base URL of the Data Fair portal. Required in standalone mode (stdio transport).",
       "example": "https://opendata.koumoul.com"
+    },
+    "dataFairAPIKey": {
+      "type": "string",
+      "description": "API key sent to Data Fair for authentication. Used in standalone mode."
+    },
+    "ignoreRateLimiting": {
+      "type": "string",
+      "description": "Secret key sent to Data Fair to bypass rate limiting constraints. Used in stack mode."
     },
     "observer": {
       "type": "object",

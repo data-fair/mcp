@@ -2,7 +2,10 @@
 
 ## Project overview
 
-MCP (Model Context Protocol) server for the Data Fair ecosystem. Exposes Data Fair datasets to LLM agents via the MCP standard, supporting both stdio and HTTP transports.
+MCP (Model Context Protocol) server for the Data Fair ecosystem. Exposes Data Fair datasets to LLM agents via the MCP standard. Two usage modes:
+
+- **Standalone mode**: run via Docker with stdio transport, connects remotely to a Data Fair instance. Requires `PORTAL_URL`. Supports `DATA_FAIR_API_KEY` for authentication and `IGNORE_RATE_LIMITING` to bypass rate limits.
+- **Data Fair stack mode**: deployed as a web service alongside Data Fair (available on `/mcp-server` on the same domain). Uses HTTP transport. Portal URL is inferred from reverse-proxy headers.
 
 ## Tech stack
 

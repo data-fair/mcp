@@ -29,12 +29,21 @@ const getOrigin = (headers: IsomorphicHeaders | undefined): string => {
     return origin
   }
 }
-const buildAxiosOptions = (headers: IsomorphicHeaders | undefined, defineBaseURL?: boolean): AxiosRequestConfig => ({
-  baseURL: defineBaseURL ? getOrigin(headers) + '/data-fair/api/v1' : undefined,
-  headers: {
+const buildAxiosOptions = (headers: IsomorphicHeaders | undefined, defineBaseURL?: boolean): AxiosRequestConfig => {
+  const axiosHeaders: Record<string, string> = {
     'User-Agent': '@data-fair/mcp (Datasets)'
   }
-})
+  if (config.dataFairAPIKey) {
+    axiosHeaders['x-api-key'] = config.dataFairAPIKey
+  }
+  if (config.ignoreRateLimiting) {
+    axiosHeaders['x-ignore-rate-limiting'] = config.ignoreRateLimiting
+  }
+  return {
+    baseURL: defineBaseURL ? getOrigin(headers) + '/data-fair/api/v1' : undefined,
+    headers: axiosHeaders
+  }
+}
 const encodeDatasetId = (datasetId: string): string => encodeURIComponent(datasetId)
 
 /*
