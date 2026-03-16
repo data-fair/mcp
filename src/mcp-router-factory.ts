@@ -33,7 +33,8 @@ export function createMCPRouter (mcpServer: McpServer): Router {
   router.post('/mcp', async (req: Request, res: Response) => {
     try {
       const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true
       })
       res.on('close', () => {
         transport.close()
