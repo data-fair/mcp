@@ -128,9 +128,9 @@ export default (server: McpServer) => {
           buildAxiosOptions(extra.requestInfo?.headers)
         )).data.results
       } catch (err: any) {
-        handleApiError(err)
+        handleApiError(err) // always throws
       }
-      dataset.sampleLines = sampleLines.map((line: any) => {
+      dataset.sampleLines = sampleLines!.map((line: any) => {
         const { _id, _i, _rand, ...clean } = line
         return clean
       })
