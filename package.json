@@ -34,6 +34,7 @@
     "@data-fair/lib-types-builder": "^1.8.2",
     "@modelcontextprotocol/sdk": "^1.17.1",
     "config": "^3.3.12",
+    "csv-stringify": "^6.7.0",
     "debug": "^4.4.1",
     "express": "^5.1.0",
     "http-terminator": "^3.2.0",
