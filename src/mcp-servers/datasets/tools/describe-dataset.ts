@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
-import { getOrigin, buildAxiosOptions, encodeDatasetId } from './_utils.ts'
+import { getOrigin, buildAxiosOptions, encodeDatasetId, handleApiError, toCSV, formatTextOutput } from './_utils.ts'
 
 const debug = Debug('datasets-tools')
 
@@ -13,7 +13,7 @@ export default (server: McpServer) => {
       title: 'Describe Dataset',
       description: 'Get detailed metadata for a dataset: column schema, sample rows, license, spatial/temporal coverage.',
       inputSchema: {
-        datasetId: z.string().describe('The unique dataset ID obtained from search_datasets or provided by the user')
+        datasetId: z.string().describe('The exact dataset ID from the "id" field in search_datasets results. Do not use the title or slug.')
       },
       outputSchema: {
         id: z.string().describe('Unique dataset Id (required for search_data tools)'),
@@ -57,10 +57,15 @@ export default (server: McpServer) => {
 
       const baseUrl = getOrigin(extra.requestInfo?.headers)
 
-      const fetchedData = (await axios.get(
-        new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}`, baseUrl).toString(),
-        buildAxiosOptions(extra.requestInfo?.headers)
-      )).data
+      let fetchedData: any
+      try {
+        fetchedData = (await axios.get(
+          new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}`, baseUrl).toString(),
+          buildAxiosOptions(extra.requestInfo?.headers)
+        )).data
+      } catch (err: any) {
+        handleApiError(err)
+      }
 
       const dataset: any = {
         id: fetchedData.id,
@@ -71,7 +76,11 @@ export default (server: McpServer) => {
 
       if (fetchedData.slug) dataset.slug = fetchedData.slug
       if (fetchedData.summary) dataset.summary = fetchedData.summary
-      if (fetchedData.description) dataset.description = fetchedData.description
+      if (fetchedData.description) {
+        dataset.description = fetchedData.description.length > 2000
+          ? fetchedData.description.slice(0, 2000) + '… (truncated, see dataset page for full description)'
+          : fetchedData.description
+      }
       if (fetchedData.keywords) dataset.keywords = fetchedData.keywords
       if (fetchedData.origin) dataset.origin = fetchedData.origin
       if (fetchedData.license) dataset.license = fetchedData.license
@@ -94,7 +103,15 @@ export default (server: McpServer) => {
             if (col['x-concept']?.title || col['x-concept']?.id) {
               colResult.concept = col['x-concept']?.title || col['x-concept']?.id
             }
-            if (col.enum) colResult.enum = col.enum
+            if (col.enum) {
+              if (col.enum.length <= 20) {
+                colResult.enum = col.enum
+              } else {
+                colResult.enum = col.enum.slice(0, 20)
+                colResult.enumTruncated = true
+                colResult.enumTotal = col.enum.length
+              }
+            }
             if (col['x-labels']) colResult.labels = col['x-labels']
 
             return colResult
@@ -104,20 +121,83 @@ export default (server: McpServer) => {
       const sampleUrl = new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/lines`, baseUrl)
       sampleUrl.searchParams.set('size', '3')
 
-      const sampleLines = (await axios.get(
-        sampleUrl.toString(),
-        buildAxiosOptions(extra.requestInfo?.headers)
-      )).data.results
-      dataset.sampleLines = sampleLines
+      let sampleLines: any[]
+      try {
+        sampleLines = (await axios.get(
+          sampleUrl.toString(),
+          buildAxiosOptions(extra.requestInfo?.headers)
+        )).data.results
+      } catch (err: any) {
+        handleApiError(err)
+      }
+      dataset.sampleLines = sampleLines.map((line: any) => {
+        const { _id, _i, _rand, ...clean } = line
+        return clean
+      })
+
+      // Build text output
+      const metadataLines = [`Dataset: ${dataset.title}`, `ID: ${dataset.id}`]
+      if (dataset.slug) metadataLines.push(`Slug: ${dataset.slug}`)
+      metadataLines.push(`Link: ${dataset.link}`)
+      if (dataset.summary) metadataLines.push(`Summary: ${dataset.summary}`)
+      metadataLines.push(`Rows: ${dataset.count}`)
+      if (dataset.license) metadataLines.push(`License: ${dataset.license.title} (${dataset.license.href})`)
+      if (dataset.origin) metadataLines.push(`Origin: ${dataset.origin}`)
+      if (dataset.keywords) metadataLines.push(`Keywords: ${dataset.keywords.join(', ')}`)
+      if (dataset.topics) metadataLines.push(`Topics: ${dataset.topics.join(', ')}`)
+      if (dataset.frequency) metadataLines.push(`Frequency: ${dataset.frequency}`)
+      if (dataset.spatial) metadataLines.push(`Spatial: ${typeof dataset.spatial === 'string' ? dataset.spatial : JSON.stringify(dataset.spatial)}`)
+      if (dataset.temporal) metadataLines.push(`Temporal: ${typeof dataset.temporal === 'string' ? dataset.temporal : JSON.stringify(dataset.temporal)}`)
+
+      let descriptionSection = ''
+      if (dataset.description) {
+        descriptionSection = `Description:\n${dataset.description}`
+      }
+
+      let schemaSection = ''
+      if (dataset.schema && dataset.schema.length > 0) {
+        const schemaLines = dataset.schema.map((col: any) => {
+          let line = `- ${col.key} (${col.type})`
+          if (col.title) line += `: ${col.title}`
+          if (col.description) line += ` — ${col.description}`
+          if (col.concept) line += ` [concept: ${col.concept}]`
+          if (col.enum) {
+            const shown = col.enum.join(', ')
+            if (col.enumTruncated) {
+              line += ` [enum: ${shown}, ... (${col.enumTotal} total)]`
+            } else {
+              line += ` [enum: ${shown}]`
+            }
+          }
+          if (col.labels) {
+            const entries = Object.entries(col.labels)
+            const shown = entries.slice(0, 10).map(([k, v]) => `${k}=${v}`).join(', ')
+            if (entries.length > 10) {
+              line += ` [labels: ${shown}, ... (${entries.length} total)]`
+            } else {
+              line += ` [labels: ${shown}]`
+            }
+          }
+          return line
+        })
+        schemaSection = `Schema (${dataset.schema.length} columns):\n${schemaLines.join('\n')}`
+      }
+
+      let sampleSection = ''
+      if (dataset.sampleLines && dataset.sampleLines.length > 0) {
+        sampleSection = `Sample data:\n${toCSV(dataset.sampleLines).trimEnd()}`
+      }
+
+      const text = formatTextOutput([
+        metadataLines.join('\n'),
+        descriptionSection,
+        schemaSection,
+        sampleSection
+      ])
 
       return {
         structuredContent: dataset,
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(dataset)
-          }
-        ]
+        content: [{ type: 'text', text }]
       }
     }
   )

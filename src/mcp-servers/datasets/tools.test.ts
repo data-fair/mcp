@@ -104,7 +104,6 @@ describe('describe_dataset', () => {
       ]
     })
     routes['/datasets/ds1'] = (url) => {
-      // Only match the metadata endpoint, not /lines
       if (url.pathname.includes('/lines')) return undefined
       return {
         id: 'ds1',
@@ -126,28 +125,37 @@ describe('describe_dataset', () => {
     }
 
     const result = await client.callTool({ name: 'describe_dataset', arguments: { datasetId: 'ds1' } })
-    const content = JSON.parse((result.content as any)[0].text)
 
-    assert.equal(content.id, 'ds1')
-    assert.equal(content.title, 'Entreprises')
-    assert.equal(content.slug, 'entreprises')
-    assert.equal(content.count, 1000)
-    assert.equal(content.license.title, 'Open License')
+    // Verify structuredContent
+    const sc = result.structuredContent as any
+    assert.equal(sc.id, 'ds1')
+    assert.equal(sc.title, 'Entreprises')
+    assert.equal(sc.slug, 'entreprises')
+    assert.equal(sc.count, 1000)
+    assert.equal(sc.license.title, 'Open License')
+    assert.equal(sc.schema.length, 2)
+    assert.equal(sc.schema[0].key, 'nom')
+    assert.equal(sc.schema[0].concept, 'Nom entreprise')
+    assert.equal(sc.schema[1].key, 'ville')
+    assert.deepEqual(sc.schema[1].enum, ['Paris', 'Lyon'])
+    assert.deepEqual(sc.schema[1].labels, { Paris: 'Paris', Lyon: 'Lyon' })
+    assert.equal(sc.sampleLines.length, 3)
+    assert.equal(sc.sampleLines[0].nom, 'ACME')
+    assert.equal(sc.sampleLines[0]._id, undefined)
 
-    // Internal columns (_id, _i, _rand) should be filtered out
-    assert.equal(content.schema.length, 2)
-    assert.equal(content.schema[0].key, 'nom')
-    assert.equal(content.schema[0].concept, 'Nom entreprise')
-    assert.equal(content.schema[1].key, 'ville')
-    assert.deepEqual(content.schema[1].enum, ['Paris', 'Lyon'])
-    assert.deepEqual(content.schema[1].labels, { Paris: 'Paris', Lyon: 'Lyon' })
-
-    // Sample lines — internal fields should be stripped
-    assert.equal(content.sampleLines.length, 3)
-    assert.equal(content.sampleLines[0].nom, 'ACME')
-    assert.equal(content.sampleLines[0]._id, undefined)
-    assert.equal(content.sampleLines[0]._i, undefined)
-    assert.equal(content.sampleLines[0]._rand, undefined)
+    // Verify text format
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('Dataset: Entreprises'))
+    assert.ok(text.includes('ID: ds1'))
+    assert.ok(text.includes('Rows: 1000'))
+    assert.ok(text.includes('License: Open License'))
+    assert.ok(text.includes('Keywords: entreprise, siège'))
+    assert.ok(text.includes('- nom (string): Nom [concept: Nom entreprise]'))
+    assert.ok(text.includes('[labels: Paris=Paris, Lyon=Lyon]'))
+    assert.ok(text.includes('Sample data:'))
+    assert.ok(text.includes('nom,ville'))
+    assert.ok(text.includes('ACME,Paris'))
+    assert.ok(!text.startsWith('{'))  // No JSON
   })
 
   it('should truncate large enum arrays', async () => {
@@ -168,15 +176,17 @@ describe('describe_dataset', () => {
     }
 
     const result = await client.callTool({ name: 'describe_dataset', arguments: { datasetId: 'ds2' } })
-    const content = JSON.parse((result.content as any)[0].text)
+    const sc = result.structuredContent as any
 
-    // Large enum should be truncated to 20
-    assert.equal(content.schema[0].enum.length, 20)
-    assert.equal(content.schema[0].enumTruncated, true)
-    assert.equal(content.schema[0].enumTotal, 50)
-    // Small enum should be kept as-is
-    assert.deepEqual(content.schema[1].enum, ['a', 'b'])
-    assert.equal(content.schema[1].enumTruncated, undefined)
+    assert.equal(sc.schema[0].enum.length, 20)
+    assert.equal(sc.schema[0].enumTruncated, true)
+    assert.equal(sc.schema[0].enumTotal, 50)
+    assert.deepEqual(sc.schema[1].enum, ['a', 'b'])
+    assert.equal(sc.schema[1].enumTruncated, undefined)
+
+    // Text should mention truncation
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('(50 total)'))
   })
 
   it('should truncate very long descriptions', async () => {
@@ -195,10 +205,14 @@ describe('describe_dataset', () => {
     }
 
     const result = await client.callTool({ name: 'describe_dataset', arguments: { datasetId: 'ds3' } })
-    const content = JSON.parse((result.content as any)[0].text)
+    const sc = result.structuredContent as any
 
-    assert.ok(content.description.length < 3000)
-    assert.ok(content.description.endsWith('… (truncated, see dataset page for full description)'))
+    assert.ok(sc.description.length < 3000)
+    assert.ok(sc.description.endsWith('… (truncated, see dataset page for full description)'))
+
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('Description:'))
+    assert.ok(text.includes('truncated'))
   })
 })
 
