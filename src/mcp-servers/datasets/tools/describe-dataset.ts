@@ -41,6 +41,8 @@ export default (server: McpServer) => {
             title: z.string().optional().describe('Human-readable column title'),
             description: z.string().optional().describe('Column description'),
             enum: z.array(z.any()).optional().describe('List of all possible values for this column'),
+            enumTruncated: z.boolean().optional().describe('Whether the enum list was truncated because it exceeded 20 values'),
+            enumTotal: z.number().optional().describe('Total number of enum values before truncation'),
             labels: z.record(z.string()).optional().describe('Object mapping actual data values (keys) to human-readable labels (values). Use keys for filters.'),
             concept: z.string().optional().describe('Semantic concept associated with the column')
           })
