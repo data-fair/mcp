@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
-import { getOrigin, buildAxiosOptions, encodeDatasetId } from './_utils.ts'
+import { getOrigin, buildAxiosOptions, encodeDatasetId, handleApiError } from './_utils.ts'
 
 const debug = Debug('datasets-tools')
 
@@ -11,9 +11,9 @@ export default (server: McpServer) => {
     'get_field_values',
     {
       title: 'Get distinct values of a dataset column',
-      description: 'List distinct values of a specific column. Useful to discover what values exist before filtering, or to populate a filter list.',
+      description: 'List distinct values of a specific column. Useful to discover what values exist before filtering, or to populate a filter list. Always call this before using _eq or _in filters to get exact values and avoid case-sensitivity errors.',
       inputSchema: {
-        datasetId: z.string().describe('The unique dataset ID obtained from search_datasets or provided by the user'),
+        datasetId: z.string().describe('The exact dataset ID from the "id" field in search_datasets results. Do not use the title or slug.'),
         fieldKey: z.string().describe('The column key to get values for (use keys from describe_dataset)'),
         query: z.string().optional().describe('Optional text to filter values (prefix/substring match within this column)'),
         sort: z.enum(['asc', 'desc']).optional().describe('Sort order for the values (default: asc)'),
@@ -39,10 +39,15 @@ export default (server: McpServer) => {
       if (params.sort) fetchUrl.searchParams.set('sort', params.sort)
       fetchUrl.searchParams.set('size', String(params.size ?? 10))
 
-      const values = (await axios.get(
-        fetchUrl.toString(),
-        buildAxiosOptions(extra.requestInfo?.headers)
-      )).data
+      let values: any
+      try {
+        values = (await axios.get(
+          fetchUrl.toString(),
+          buildAxiosOptions(extra.requestInfo?.headers)
+        )).data
+      } catch (err: any) {
+        handleApiError(err)
+      }
 
       const structuredContent = {
         datasetId: params.datasetId,
@@ -50,14 +55,11 @@ export default (server: McpServer) => {
         values
       }
 
+      const text = `Distinct values of "${params.fieldKey}" in dataset ${params.datasetId}:\n${structuredContent.values.join('\n')}`
+
       return {
         structuredContent,
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(structuredContent)
-          }
-        ]
+        content: [{ type: 'text', text }]
       }
     }
   )

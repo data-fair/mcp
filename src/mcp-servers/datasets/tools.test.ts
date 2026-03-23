@@ -515,7 +515,7 @@ describe('aggregate_data', () => {
 describe('get_field_values', () => {
   it('should return distinct values for a column', async () => {
     routes['/datasets/ds1/values/ville'] = (url) => {
-      assert.equal(url.searchParams.get('size'), '10') // default
+      assert.equal(url.searchParams.get('size'), '10')
       return ['Paris', 'Lyon', 'Marseille']
     }
 
@@ -523,11 +523,18 @@ describe('get_field_values', () => {
       name: 'get_field_values',
       arguments: { datasetId: 'ds1', fieldKey: 'ville' }
     })
-    const content = JSON.parse((result.content as any)[0].text)
+    const sc = result.structuredContent as any
 
-    assert.equal(content.datasetId, 'ds1')
-    assert.equal(content.fieldKey, 'ville')
-    assert.deepEqual(content.values, ['Paris', 'Lyon', 'Marseille'])
+    assert.equal(sc.datasetId, 'ds1')
+    assert.equal(sc.fieldKey, 'ville')
+    assert.deepEqual(sc.values, ['Paris', 'Lyon', 'Marseille'])
+
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('Distinct values of "ville" in dataset ds1:'))
+    assert.ok(text.includes('Paris'))
+    assert.ok(text.includes('Lyon'))
+    assert.ok(text.includes('Marseille'))
+    assert.ok(!text.startsWith('{'))
   })
 
   it('should pass optional parameters', async () => {
@@ -542,8 +549,8 @@ describe('get_field_values', () => {
       name: 'get_field_values',
       arguments: { datasetId: 'ds1', fieldKey: 'ville', query: 'Ly', sort: 'desc', size: 5 }
     })
-    const content = JSON.parse((result.content as any)[0].text)
-    assert.deepEqual(content.values, ['Lyon'])
+    const sc = result.structuredContent as any
+    assert.deepEqual(sc.values, ['Lyon'])
   })
 })
 
