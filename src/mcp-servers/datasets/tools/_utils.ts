@@ -2,7 +2,6 @@ import type { IsomorphicHeaders } from '@modelcontextprotocol/sdk/types.js'
 import type { AxiosRequestConfig } from 'axios'
 import { z } from 'zod'
 import config from '#config'
-import { stringify } from 'csv-stringify/sync'
 
 /**
  * Based on https://github.com/data-fair/lib/blob/664c427f47233379c2051a08c5c610bcf6376b89/packages/express/req-origin.ts#L18
