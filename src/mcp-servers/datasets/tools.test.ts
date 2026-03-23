@@ -415,14 +415,22 @@ describe('aggregate_data', () => {
       name: 'aggregate_data',
       arguments: { datasetId: 'ds1', groupByColumns: ['ville'] }
     })
-    const content = JSON.parse((result.content as any)[0].text)
+    const sc = result.structuredContent as any
 
-    assert.equal(content.total, 100)
-    assert.equal(content.totalAggregated, 3)
-    assert.equal(content.nonRepresented, 10)
-    assert.equal(content.aggregations.length, 3)
-    assert.equal(content.aggregations[0].columnValue, 'Paris')
-    assert.equal(content.aggregations[0].total, 50)
+    assert.equal(sc.total, 100)
+    assert.equal(sc.totalAggregated, 3)
+    assert.equal(sc.nonRepresented, 10)
+    assert.equal(sc.aggregations.length, 3)
+    assert.equal(sc.aggregations[0].columnValue, 'Paris')
+    assert.equal(sc.aggregations[0].total, 50)
+
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('Total: 100 rows'))
+    assert.ok(text.includes('Groups shown: 3'))
+    assert.ok(text.includes('Rows not shown: 10'))
+    assert.ok(text.includes('- Paris: 50 rows'))
+    assert.ok(text.includes('- Lyon: 30 rows'))
+    assert.ok(!text.startsWith('{'))
   })
 
   it('should aggregate with a metric', async () => {
@@ -448,8 +456,11 @@ describe('aggregate_data', () => {
         metric: { column: 'salaire', type: 'avg' }
       }
     })
-    const content = JSON.parse((result.content as any)[0].text)
-    assert.equal(content.aggregations[0].metricValue, 45000)
+    const sc = result.structuredContent as any
+    assert.equal(sc.aggregations[0].metricValue, 45000)
+
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('- Paris: 50 rows, avg salaire = 45000'))
   })
 
   it('should support nested aggregations', async () => {
@@ -477,9 +488,14 @@ describe('aggregate_data', () => {
       name: 'aggregate_data',
       arguments: { datasetId: 'ds1', groupByColumns: ['ville', 'contrat'] }
     })
-    const content = JSON.parse((result.content as any)[0].text)
-    assert.equal(content.aggregations[0].aggregations.length, 2)
-    assert.equal(content.aggregations[0].aggregations[0].columnValue, 'CDI')
+    const sc = result.structuredContent as any
+    assert.equal(sc.aggregations[0].aggregations.length, 2)
+    assert.equal(sc.aggregations[0].aggregations[0].columnValue, 'CDI')
+
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('- Paris: 50 rows'))
+    assert.ok(text.includes('  - CDI: 30 rows'))
+    assert.ok(text.includes('  - CDD: 20 rows'))
   })
 
   it('should pass sort parameter', async () => {
