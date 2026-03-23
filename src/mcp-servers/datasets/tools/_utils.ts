@@ -57,16 +57,6 @@ export const filtersSchema = z.record(
 ).optional().describe('Column filters as key-value pairs. Key format: column_key + suffix (see server instructions for available suffixes). All values must be strings, even for numbers/dates. If a column key has underscores (e.g., code_postal), just append the suffix: code_postal_eq. Example: { "nom_search": "Jean", "age_lte": "30", "ville_eq": "Paris" }')
 
 /**
- * Convert an array of row objects to CSV string (header + data rows).
- * Uses csv-stringify for RFC 4180 escaping.
- */
-export const toCSV = (rows: Record<string, any>[]): string => {
-  if (rows.length === 0) return ''
-  const columns = Object.keys(rows[0])
-  return stringify(rows, { header: true, columns })
-}
-
-/**
  * Join non-empty text sections with blank lines.
  */
 export const formatTextOutput = (sections: string[]): string => {

@@ -18,13 +18,15 @@ const server = new McpServer({
   instructions: `You are querying French open data through Data Fair. Follow this workflow and these rules.
 
 ## Workflow
-1. **search_datasets** — find relevant datasets using French keywords (simple terms, not sentences).
+1. **search_datasets** — find relevant datasets using French keywords (simple terms, not sentences). If 0 results, try synonyms or broader French terms. If many results, read titles and summaries to pick the most relevant.
 2. **describe_dataset** — get the schema, sample rows, and metadata for a dataset. Always do this before querying data.
-3. Use the appropriate tool(s) depending on the question:
-   - **search_data** — find specific rows matching a query or filters.
-   - **aggregate_data** — group rows by 1-3 columns with optional metrics.
-   - **get_field_values** — list distinct values of a column (useful before filtering to know what values exist).
-   - **calculate_metric** — compute a single metric (avg, sum, min, max, cardinality, percentiles, etc.) on a column, optionally with filters.
+3. Choose the right tool based on the question:
+   - "Show me rows / find specific records / who / which" → **search_data**
+   - "How many X per Y / breakdown by category / distribution" → **aggregate_data**
+   - "What is the total / average / min / max of X?" → **calculate_metric**
+   - "What values exist in column X?" → **get_field_values**
+
+When a dataset has many columns (10+), use the \`select\` parameter in search_data to request only relevant columns.
 
 ## Filters (search_data, aggregate_data & calculate_metric)
 Filters are key-value pairs where the key is \`column_key\` + a suffix:
@@ -34,6 +36,13 @@ Filters are key-value pairs where the key is \`column_key\` + a suffix:
 - \`_starts\`: prefix match, \`_contains\`: substring match
 - \`_gt\` / \`_gte\` / \`_lt\` / \`_lte\`: numeric/date comparisons
 - \`_exists\` / \`_nexists\`: field presence
+
+If a column key contains underscores (e.g., code_postal), just append the suffix: code_postal_eq, code_postal_search.
+
+**Important: all filter values must be strings**, even for numbers and dates.
+
+Example — find people named "Dupont" in Paris over 30 years old:
+  filters: { "nom_eq": "Dupont", "ville_eq": "Paris", "age_gte": "30" }
 
 Prefer filters over the \`query\` parameter when the question involves multiple criteria or numeric/date ranges.
 Use sample rows from describe_dataset to understand exact value formatting before filtering.

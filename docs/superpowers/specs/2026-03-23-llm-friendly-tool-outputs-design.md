@@ -189,10 +189,10 @@ Implementation: recursive function to format nested aggregations with increasing
 
 ### CSV generation helper
 
-Add a `toCSV(rows: Record<string, any>[]): string` utility in `_utils.ts`:
+Add a `toCSV(rows: Record<string, any>[]): string` utility in `_utils.ts` using the `csv-stringify/sync` package:
 - Extract column keys from first row
-- Escape values containing commas, quotes, or newlines (RFC 4180)
-- Return header + data rows
+- Use `stringify()` with `header: true` and `columns` derived from row keys
+- RFC 4180 escaping is handled by the library
 
 This is used as fallback when direct API CSV fetch is impractical (e.g., describe_dataset sample lines where we already have JSON).
 
@@ -208,10 +208,7 @@ The `structuredContent` field remains identical. Only the `text` field in `conte
 
 ### CSV edge cases
 
-The `toCSV()` helper must handle RFC 4180 escaping:
-- Values containing commas, double-quotes, or newlines are wrapped in double-quotes
-- Double-quotes within values are escaped as `""`
-- Very long text fields (e.g., description columns) are truncated in the CSV text output; `structuredContent` retains full values
+RFC 4180 escaping (commas, quotes, newlines) is handled by `csv-stringify/sync`. Very long text fields (e.g., description columns) may be truncated in the CSV text output; `structuredContent` retains full values.
 
 ### Tests
 
