@@ -2,7 +2,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
-import { getOrigin, buildAxiosOptions, encodeDatasetId, handleApiError, toCSV, formatTextOutput } from './_utils.ts'
+import { getOrigin, buildAxiosOptions, encodeDatasetId, handleApiError, formatTextOutput } from './_utils.ts'
+import { stringify as csvStringify } from 'csv-stringify/sync'
 
 const debug = Debug('datasets-tools')
 
@@ -185,7 +186,7 @@ export default (server: McpServer) => {
 
       let sampleSection = ''
       if (dataset.sampleLines && dataset.sampleLines.length > 0) {
-        sampleSection = `Sample data:\n${toCSV(dataset.sampleLines).trimEnd()}`
+        sampleSection = `Sample data:\n${csvStringify(dataset.sampleLines, { header: true }).trimEnd()}`
       }
 
       const text = formatTextOutput([

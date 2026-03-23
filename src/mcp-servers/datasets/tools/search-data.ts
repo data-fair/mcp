@@ -3,7 +3,7 @@ import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
 import { getOrigin, buildAxiosOptions, encodeDatasetId, filtersSchema, handleApiError, formatTextOutput } from './_utils.ts'
-import csvStringify from 'csv-stringify/sync'
+import { stringify as csvStringify } from 'csv-stringify/sync'
 
 const debug = Debug('datasets-tools')
 
