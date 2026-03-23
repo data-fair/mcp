@@ -45,30 +45,43 @@ Format: plain text metadata header, Markdown-KV schema, CSV sample lines.
 ```
 Dataset: Élus municipaux 2024
 ID: elus-municipaux-2024
+Slug: elus-municipaux-2024
 Link: https://example.com/datasets/elus-municipaux-2024
+Summary: Liste des élus municipaux de France avec leurs mandats
 Rows: 524000
 License: Licence Ouverte (https://...)
+Origin: Ministère de l'Intérieur
 Keywords: élus, municipaux
 Topics: Politique
 Frequency: monthly
+Spatial: France métropolitaine
+Temporal: 2020-2024
+
+Description:
+Ce jeu de données contient la liste des élus municipaux...
+(truncated, see dataset page for full description)
 
 Schema (5 columns):
 - nom (string): Nom de l'élu [concept: Nom de famille]
 - prenom (string): Prénom de l'élu [concept: Prénom]
 - age (integer): Âge
 - ville (string): Commune [enum: Paris, Lyon, Marseille, ... (150 total)]
+- dept (string): Département [labels: 01=Ain, 02=Aisne, ... (101 total)]
 - salaire (number): Salaire annuel
 
 Sample data:
-nom,prenom,age,ville,salaire
-Jean Dupont,Jean,42,Paris,52000
-Marie Martin,Marie,35,Lyon,48000
-Pierre Bernard,Pierre,58,Marseille,55000
+nom,prenom,age,ville,dept,salaire
+Jean Dupont,Jean,42,Paris,75,52000
+Marie Martin,Marie,35,Lyon,69,48000
+Pierre Bernard,Pierre,58,Marseille,13,55000
 ```
 
 Implementation:
-- Metadata: key-value lines, only include present optional fields
-- Schema: one line per column with type, description, concept, enum summary
+- Metadata: key-value lines, only include present optional fields (slug, summary, description, origin, spatial, temporal, keywords, topics, license, frequency)
+- Description: include if present, already truncated to 2000 chars in structuredContent
+- Spatial/temporal: render as simple text (stringify if object, or extract human-readable fields like label/zone)
+- Schema: one line per column with type, description, concept, enum summary, and labels summary
+- Labels: shown as `[labels: key1=val1, key2=val2, ... (N total)]` — truncated to first few entries if large
 - Sample lines: fetch via API with `format=csv&size=3`
 
 ### 3. `search_data`
@@ -87,10 +100,12 @@ Pierre Bernard,Marseille,58
 Next page available.
 ```
 
+When a `query` is provided, include the `_score` column in the CSV output to show relevance ranking.
+
 Implementation:
-- Fetch CSV directly from API via `format=csv` parameter
-- Still need a JSON call (or response headers) for `total` count and `next` URL
-- Strategy: make one JSON call for metadata (`size=0` to get just `total`), then one CSV call for rows. Or: fetch JSON as today, generate CSV from the parsed results (simpler, single call). Choose the simpler approach during implementation.
+- Fetch JSON as today (single call, provides total/next/results), then convert rows to CSV locally via `toCSV()` helper
+- This avoids a dual HTTP call (one for metadata, one for CSV) and keeps the implementation simple
+- The `_score` field is included in CSV when present (i.e., when a query was used)
 
 ### 4. `calculate_metric`
 
@@ -119,13 +134,24 @@ Total rows: 524000
 Result: 1%=18500, 5%=22000, 25%=35000, 50%=48000, 75%=62000, 95%=85000, 99%=105000
 ```
 
+For `value_count`, `cardinality`, `min`, `max`, `sum` metrics: same format as `avg` (single number result).
+
 ### 5. `get_field_values`
 
-Format: plain text with comma-separated values.
+Format: newline-separated values (avoids ambiguity when values contain commas).
 
 ```
 Distinct values of "ville" in dataset elus-municipaux-2024:
-Paris, Lyon, Marseille, Toulouse, Nice, Nantes, Strasbourg, Montpellier, Bordeaux, Lille
+Paris
+Lyon
+Marseille
+Toulouse
+Nice
+Nantes
+Strasbourg
+Montpellier
+Bordeaux
+Lille
 ```
 
 ### 6. `aggregate_data`
@@ -157,7 +183,7 @@ API URL: https://...
 - Lyon: 32000 rows
 ```
 
-Implementation: recursive function to format nested aggregations with increasing indentation.
+Implementation: recursive function to format nested aggregations with increasing indentation. Only show `nonRepresented` at the top level summary line (nested levels don't add useful context for LLMs).
 
 ## Implementation Notes
 
@@ -179,6 +205,19 @@ Add formatting functions in `_utils.ts`:
 ### No changes to `structuredContent`
 
 The `structuredContent` field remains identical. Only the `text` field in `content` changes.
+
+### CSV edge cases
+
+The `toCSV()` helper must handle RFC 4180 escaping:
+- Values containing commas, double-quotes, or newlines are wrapped in double-quotes
+- Double-quotes within values are escaped as `""`
+- Very long text fields (e.g., description columns) are truncated in the CSV text output; `structuredContent` retains full values
+
+### Tests
+
+Existing tests in `tools.test.ts` parse text content via `JSON.parse()` — these will all break. Update strategy:
+- Test `structuredContent` for data correctness (assertions on structure/values)
+- Test `text` content with string matching for format correctness (contains expected headers, values, formatting)
 
 ### Backwards compatibility
 
