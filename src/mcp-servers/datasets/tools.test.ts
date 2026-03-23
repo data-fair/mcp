@@ -559,13 +559,36 @@ describe('calculate_metric', () => {
       name: 'calculate_metric',
       arguments: { datasetId: 'ds1', fieldKey: 'salaire', metric: 'avg' }
     })
-    const content = JSON.parse((result.content as any)[0].text)
+    const sc = result.structuredContent as any
 
-    assert.equal(content.datasetId, 'ds1')
-    assert.equal(content.fieldKey, 'salaire')
-    assert.equal(content.metric, 'avg')
-    assert.equal(content.total, 1000)
-    assert.equal(content.value, 42500)
+    assert.equal(sc.datasetId, 'ds1')
+    assert.equal(sc.fieldKey, 'salaire')
+    assert.equal(sc.metric, 'avg')
+    assert.equal(sc.total, 1000)
+    assert.equal(sc.value, 42500)
+
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('Metric: avg of "salaire"'))
+    assert.ok(text.includes('Dataset: ds1'))
+    assert.ok(text.includes('Total rows: 1000'))
+    assert.ok(text.includes('Result: 42500'))
+    assert.ok(!text.startsWith('{'))
+  })
+
+  it('should format stats metric as key=value pairs', async () => {
+    routes['/datasets/ds1/metric_agg'] = (url) => {
+      assert.equal(url.searchParams.get('metric'), 'stats')
+      return { total: 1000, metric: { count: 1000, min: 18000, max: 120000, avg: 48500, sum: 48500000 } }
+    }
+
+    const result = await client.callTool({
+      name: 'calculate_metric',
+      arguments: { datasetId: 'ds1', fieldKey: 'salaire', metric: 'stats' }
+    })
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('count=1000'))
+    assert.ok(text.includes('min=18000'))
+    assert.ok(text.includes('avg=48500'))
   })
 
   it('should pass filters and percents', async () => {
@@ -585,7 +608,11 @@ describe('calculate_metric', () => {
         filters: { ville_eq: 'Paris' }
       }
     })
-    const content = JSON.parse((result.content as any)[0].text)
-    assert.equal(content.value['50'], 42000)
+    const sc = result.structuredContent as any
+    assert.equal(sc.value['50'], 42000)
+
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('25%=30000'))
+    assert.ok(text.includes('50%=42000'))
   })
 })
