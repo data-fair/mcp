@@ -72,16 +72,25 @@ describe('search_datasets', () => {
     })
 
     const result = await client.callTool({ name: 'search_datasets', arguments: { query: 'entreprises' } })
-    const content = JSON.parse((result.content as any)[0].text)
 
-    assert.equal(content.count, 2)
-    assert.equal(content.datasets.length, 2)
-    assert.equal(content.datasets[0].id, 'ds1')
-    assert.equal(content.datasets[0].title, 'Entreprises')
-    assert.equal(content.datasets[0].summary, 'Liste des entreprises')
-    assert.equal(content.datasets[0].link, 'https://example.com/datasets/ds1')
-    // Dataset without summary should not include the field
-    assert.equal(content.datasets[1].summary, undefined)
+    // Verify structuredContent
+    const sc = result.structuredContent as any
+    assert.equal(sc.count, 2)
+    assert.equal(sc.datasets.length, 2)
+    assert.equal(sc.datasets[0].id, 'ds1')
+    assert.equal(sc.datasets[0].title, 'Entreprises')
+    assert.equal(sc.datasets[0].summary, 'Liste des entreprises')
+    assert.equal(sc.datasets[0].link, 'https://example.com/datasets/ds1')
+    assert.equal(sc.datasets[1].summary, undefined)
+
+    // Verify text format
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('2 datasets found.'))
+    assert.ok(text.includes('Entreprises (id: ds1)'))
+    assert.ok(text.includes('Liste des entreprises'))
+    assert.ok(text.includes('https://example.com/datasets/ds1'))
+    assert.ok(text.includes('Logements (id: ds2)'))
+    assert.ok(!text.includes('{'))  // No JSON
   })
 })
 
@@ -89,9 +98,9 @@ describe('describe_dataset', () => {
   it('should return dataset metadata with schema and sample lines', async () => {
     routes['/datasets/ds1/lines'] = () => ({
       results: [
-        { nom: 'ACME', ville: 'Paris' },
-        { nom: 'Globex', ville: 'Lyon' },
-        { nom: 'Initech', ville: 'Paris' }
+        { _id: 'abc', _i: 1, _rand: 123, nom: 'ACME', ville: 'Paris' },
+        { _id: 'def', _i: 2, _rand: 456, nom: 'Globex', ville: 'Lyon' },
+        { _id: 'ghi', _i: 3, _rand: 789, nom: 'Initech', ville: 'Paris' }
       ]
     })
     routes['/datasets/ds1'] = (url) => {
@@ -133,9 +142,63 @@ describe('describe_dataset', () => {
     assert.deepEqual(content.schema[1].enum, ['Paris', 'Lyon'])
     assert.deepEqual(content.schema[1].labels, { Paris: 'Paris', Lyon: 'Lyon' })
 
-    // Sample lines
+    // Sample lines — internal fields should be stripped
     assert.equal(content.sampleLines.length, 3)
     assert.equal(content.sampleLines[0].nom, 'ACME')
+    assert.equal(content.sampleLines[0]._id, undefined)
+    assert.equal(content.sampleLines[0]._i, undefined)
+    assert.equal(content.sampleLines[0]._rand, undefined)
+  })
+
+  it('should truncate large enum arrays', async () => {
+    const largeEnum = Array.from({ length: 50 }, (_, i) => `val${i}`)
+    routes['/datasets/ds2/lines'] = () => ({ results: [{ code: 'val0' }] })
+    routes['/datasets/ds2'] = (url) => {
+      if (url.pathname.includes('/lines')) return undefined
+      return {
+        id: 'ds2',
+        title: 'Large enums',
+        page: 'https://example.com/datasets/ds2',
+        count: 100,
+        schema: [
+          { key: 'code', type: 'string', enum: largeEnum },
+          { key: 'small', type: 'string', enum: ['a', 'b'] }
+        ]
+      }
+    }
+
+    const result = await client.callTool({ name: 'describe_dataset', arguments: { datasetId: 'ds2' } })
+    const content = JSON.parse((result.content as any)[0].text)
+
+    // Large enum should be truncated to 20
+    assert.equal(content.schema[0].enum.length, 20)
+    assert.equal(content.schema[0].enumTruncated, true)
+    assert.equal(content.schema[0].enumTotal, 50)
+    // Small enum should be kept as-is
+    assert.deepEqual(content.schema[1].enum, ['a', 'b'])
+    assert.equal(content.schema[1].enumTruncated, undefined)
+  })
+
+  it('should truncate very long descriptions', async () => {
+    const longDescription = 'A'.repeat(3000)
+    routes['/datasets/ds3/lines'] = () => ({ results: [] })
+    routes['/datasets/ds3'] = (url) => {
+      if (url.pathname.includes('/lines')) return undefined
+      return {
+        id: 'ds3',
+        title: 'Long desc',
+        page: 'https://example.com/datasets/ds3',
+        count: 10,
+        description: longDescription,
+        schema: []
+      }
+    }
+
+    const result = await client.callTool({ name: 'describe_dataset', arguments: { datasetId: 'ds3' } })
+    const content = JSON.parse((result.content as any)[0].text)
+
+    assert.ok(content.description.length < 3000)
+    assert.ok(content.description.endsWith('… (truncated, see dataset page for full description)'))
   })
 })
 
@@ -147,7 +210,7 @@ describe('search_data', () => {
       assert.equal(url.searchParams.get('size'), '10')
       return {
         total: 5,
-        results: [{ nom: 'ACME', ville: 'Paris', _score: 1.5 }]
+        results: [{ _id: 'abc', _i: 1, _rand: 123, nom: 'ACME', ville: 'Paris', _score: 1.5 }]
       }
     }
 
@@ -161,6 +224,11 @@ describe('search_data', () => {
     assert.equal(content.count, 5)
     assert.equal(content.lines.length, 1)
     assert.equal(content.lines[0].nom, 'ACME')
+    // Internal fields should be stripped, but _score should be kept
+    assert.equal(content.lines[0]._id, undefined)
+    assert.equal(content.lines[0]._i, undefined)
+    assert.equal(content.lines[0]._rand, undefined)
+    assert.equal(content.lines[0]._score, 1.5)
     assert.ok(content.filteredViewUrl.includes('/datasets/ds1/full'))
     assert.ok(content.filteredViewUrl.includes('q=ACME'))
   })
@@ -256,6 +324,21 @@ describe('search_data', () => {
     assert.equal(content.count, 25)
   })
 
+  it('should pass sort parameter', async () => {
+    routes['/datasets/ds1/lines'] = (url) => {
+      assert.equal(url.searchParams.get('sort'), 'population,-name')
+      return { total: 2, results: [{ nom: 'A' }, { nom: 'B' }] }
+    }
+
+    const result = await client.callTool({
+      name: 'search_data',
+      arguments: { datasetId: 'ds1', sort: 'population,-name' }
+    })
+    const content = JSON.parse((result.content as any)[0].text)
+    assert.equal(content.count, 2)
+    assert.ok(content.filteredViewUrl.includes('sort=population'))
+  })
+
   it('should pass select parameter', async () => {
     routes['/datasets/ds1/lines'] = (url) => {
       assert.ok(url.searchParams.get('select')?.includes('nom'))
@@ -268,6 +351,18 @@ describe('search_data', () => {
     })
     const content = JSON.parse((result.content as any)[0].text)
     assert.equal(content.lines.length, 1)
+  })
+
+  it('should trim spaces in select parameter', async () => {
+    routes['/datasets/ds1/lines'] = (url) => {
+      assert.equal(url.searchParams.get('select'), 'nom,ville,age')
+      return { total: 1, results: [{ nom: 'ACME' }] }
+    }
+
+    await client.callTool({
+      name: 'search_data',
+      arguments: { datasetId: 'ds1', select: 'nom, ville, age' }
+    })
   })
 })
 
@@ -289,7 +384,7 @@ describe('aggregate_data', () => {
 
     const result = await client.callTool({
       name: 'aggregate_data',
-      arguments: { datasetId: 'ds1', aggregationColumns: ['ville'] }
+      arguments: { datasetId: 'ds1', groupByColumns: ['ville'] }
     })
     const content = JSON.parse((result.content as any)[0].text)
 
@@ -320,8 +415,8 @@ describe('aggregate_data', () => {
       name: 'aggregate_data',
       arguments: {
         datasetId: 'ds1',
-        aggregationColumns: ['ville'],
-        aggregation: { column: 'salaire', metric: 'avg' }
+        groupByColumns: ['ville'],
+        metric: { column: 'salaire', type: 'avg' }
       }
     })
     const content = JSON.parse((result.content as any)[0].text)
@@ -351,11 +446,23 @@ describe('aggregate_data', () => {
 
     const result = await client.callTool({
       name: 'aggregate_data',
-      arguments: { datasetId: 'ds1', aggregationColumns: ['ville', 'contrat'] }
+      arguments: { datasetId: 'ds1', groupByColumns: ['ville', 'contrat'] }
     })
     const content = JSON.parse((result.content as any)[0].text)
     assert.equal(content.aggregations[0].aggregations.length, 2)
     assert.equal(content.aggregations[0].aggregations[0].columnValue, 'CDI')
+  })
+
+  it('should pass sort parameter', async () => {
+    routes['/datasets/ds1/values_agg'] = (url) => {
+      assert.equal(url.searchParams.get('sort'), '-count')
+      return { total: 10, total_values: 2, total_other: 0, aggs: [] }
+    }
+
+    await client.callTool({
+      name: 'aggregate_data',
+      arguments: { datasetId: 'ds1', groupByColumns: ['ville'], sort: '-count' }
+    })
   })
 
   it('should not send metric params when metric is count', async () => {
@@ -369,8 +476,8 @@ describe('aggregate_data', () => {
       name: 'aggregate_data',
       arguments: {
         datasetId: 'ds1',
-        aggregationColumns: ['ville'],
-        aggregation: { column: 'ville', metric: 'count' }
+        groupByColumns: ['ville'],
+        metric: { column: 'ville', type: 'count' }
       }
     })
   })

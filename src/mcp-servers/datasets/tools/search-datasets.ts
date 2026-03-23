@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
-import { getOrigin, buildAxiosOptions } from './_utils.ts'
+import { getOrigin, buildAxiosOptions, handleApiError, formatTextOutput } from './_utils.ts'
 
 const debug = Debug('datasets-tools')
 
@@ -13,7 +13,7 @@ export default (server: McpServer) => {
       title: 'Search Datasets',
       description: 'Full-text search for datasets by French keywords. Returns matching datasets with ID, title, summary, and page link.',
       inputSchema: {
-        query: z.string().min(3, 'Search term must be at least 3 characters long').describe('French keywords for full-text search (simple keywords, not sentences). Examples: "élus", "DPE", "entreprises", "logement social"')
+        query: z.string().min(3, 'Search term must be at least 3 characters long').describe('French keywords for full-text search (simple terms, not sentences). If 0 results, try synonyms or broader terms. Examples: "élus", "DPE", "entreprises", "logement social"')
       },
       outputSchema: {
         count: z.number().describe('Number of datasets matching the full-text search criteria'),
@@ -38,10 +38,15 @@ export default (server: McpServer) => {
       fetchUrl.searchParams.set('size', '20')
       fetchUrl.searchParams.set('select', 'id,title,summary')
 
-      const fetchedData = (await axios.get(
-        fetchUrl.toString(),
-        buildAxiosOptions(extra.requestInfo?.headers)
-      )).data
+      let fetchedData: any
+      try {
+        fetchedData = (await axios.get(
+          fetchUrl.toString(),
+          buildAxiosOptions(extra.requestInfo?.headers)
+        )).data
+      } catch (err: any) {
+        handleApiError(err)
+      }
 
       const structuredContent = {
         datasets: fetchedData.results.map((dataset: any) => {
@@ -58,14 +63,21 @@ export default (server: McpServer) => {
         count: fetchedData.count
       }
 
+      const datasetLines = structuredContent.datasets.map((d: any) => {
+        let line = `- ${d.title} (id: ${d.id})`
+        if (d.summary) line += `\n  ${d.summary}`
+        line += `\n  Link: ${d.link}`
+        return line
+      }).join('\n\n')
+
+      const text = formatTextOutput([
+        `${structuredContent.count} datasets found.`,
+        datasetLines
+      ])
+
       return {
         structuredContent,
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(structuredContent)
-          }
-        ]
+        content: [{ type: 'text', text }]
       }
     }
   )
