@@ -232,19 +232,27 @@ describe('search_data', () => {
       name: 'search_data',
       arguments: { datasetId: 'ds1', query: 'ACME' }
     })
-    const content = JSON.parse((result.content as any)[0].text)
 
-    assert.equal(content.datasetId, 'ds1')
-    assert.equal(content.count, 5)
-    assert.equal(content.lines.length, 1)
-    assert.equal(content.lines[0].nom, 'ACME')
-    // Internal fields should be stripped, but _score should be kept
-    assert.equal(content.lines[0]._id, undefined)
-    assert.equal(content.lines[0]._i, undefined)
-    assert.equal(content.lines[0]._rand, undefined)
-    assert.equal(content.lines[0]._score, 1.5)
-    assert.ok(content.filteredViewUrl.includes('/datasets/ds1/full'))
-    assert.ok(content.filteredViewUrl.includes('q=ACME'))
+    // Verify structuredContent
+    const sc = result.structuredContent as any
+    assert.equal(sc.datasetId, 'ds1')
+    assert.equal(sc.count, 5)
+    assert.equal(sc.lines.length, 1)
+    assert.equal(sc.lines[0].nom, 'ACME')
+    assert.equal(sc.lines[0]._id, undefined)
+    assert.equal(sc.lines[0]._i, undefined)
+    assert.equal(sc.lines[0]._rand, undefined)
+    assert.equal(sc.lines[0]._score, 1.5)
+    assert.ok(sc.filteredViewUrl.includes('/datasets/ds1/full'))
+    assert.ok(sc.filteredViewUrl.includes('q=ACME'))
+
+    // Verify text format
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('1 results (5 total)'))
+    assert.ok(text.includes('Filtered view:'))
+    assert.ok(text.includes('ACME,Paris'))
+    assert.ok(text.includes('nom,ville,_score'))  // _score column present when query used
+    assert.ok(!text.startsWith('{'))
   })
 
   it('should search data with filters', async () => {
@@ -257,8 +265,12 @@ describe('search_data', () => {
       name: 'search_data',
       arguments: { datasetId: 'ds1', filters: { ville_eq: 'Paris' } }
     })
-    const content = JSON.parse((result.content as any)[0].text)
-    assert.equal(content.count, 1)
+    const sc = result.structuredContent as any
+    assert.equal(sc.count, 1)
+
+    // When no query is used, _score should not appear in text
+    const text = (result.content as any)[0].text
+    assert.ok(!text.includes('_score'))
   })
 
   it('should pass custom size parameter', async () => {
@@ -296,9 +308,11 @@ describe('search_data', () => {
       name: 'search_data',
       arguments: { datasetId: 'ds1', query: 'ACME' }
     })
-    const content = JSON.parse((result.content as any)[0].text)
+    const sc = result.structuredContent as any
+    assert.equal(sc.next, 'http://localhost/data-fair/api/v1/datasets/ds1/lines?size=10&after=abc123')
 
-    assert.equal(content.next, 'http://localhost/data-fair/api/v1/datasets/ds1/lines?size=10&after=abc123')
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('Next page available.'))
   })
 
   it('should not include next when API does not provide one', async () => {
@@ -311,9 +325,11 @@ describe('search_data', () => {
       name: 'search_data',
       arguments: { datasetId: 'ds1', query: 'ACME' }
     })
-    const content = JSON.parse((result.content as any)[0].text)
+    const sc = result.structuredContent as any
+    assert.equal(sc.next, undefined)
 
-    assert.equal(content.next, undefined)
+    const text = (result.content as any)[0].text
+    assert.ok(!text.includes('Next page available.'))
   })
 
   it('should fetch directly from next URL when provided', async () => {
@@ -332,10 +348,9 @@ describe('search_data', () => {
       name: 'search_data',
       arguments: { datasetId: 'ds1', next: nextUrl }
     })
-    const content = JSON.parse((result.content as any)[0].text)
-
-    assert.equal(content.lines[0].nom, 'Globex')
-    assert.equal(content.count, 25)
+    const sc = result.structuredContent as any
+    assert.equal(sc.lines[0].nom, 'Globex')
+    assert.equal(sc.count, 25)
   })
 
   it('should pass sort parameter', async () => {
@@ -348,9 +363,9 @@ describe('search_data', () => {
       name: 'search_data',
       arguments: { datasetId: 'ds1', sort: 'population,-name' }
     })
-    const content = JSON.parse((result.content as any)[0].text)
-    assert.equal(content.count, 2)
-    assert.ok(content.filteredViewUrl.includes('sort=population'))
+    const sc = result.structuredContent as any
+    assert.equal(sc.count, 2)
+    assert.ok(sc.filteredViewUrl.includes('sort=population'))
   })
 
   it('should pass select parameter', async () => {
@@ -363,8 +378,8 @@ describe('search_data', () => {
       name: 'search_data',
       arguments: { datasetId: 'ds1', query: 'test', select: 'nom,ville' }
     })
-    const content = JSON.parse((result.content as any)[0].text)
-    assert.equal(content.lines.length, 1)
+    const sc = result.structuredContent as any
+    assert.equal(sc.lines.length, 1)
   })
 
   it('should trim spaces in select parameter', async () => {

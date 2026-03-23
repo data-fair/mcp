@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
-import { getOrigin, buildAxiosOptions, encodeDatasetId, filtersSchema } from './_utils.ts'
+import { getOrigin, buildAxiosOptions, encodeDatasetId, filtersSchema, handleApiError, toCSV, formatTextOutput } from './_utils.ts'
 
 const debug = Debug('datasets-tools')
 
@@ -11,14 +11,15 @@ export default (server: McpServer) => {
     'search_data',
     {
       title: 'Search data from a dataset',
-      description: 'Search for data rows in a dataset using full-text search (query) or precise column filters. Returns matching rows and a filtered view URL.',
+      description: 'Search for data rows in a dataset using full-text search (query) or precise column filters. Returns matching rows and a filtered view URL. Use to retrieve individual rows. Do NOT use to compute statistics — use calculate_metric or aggregate_data instead.',
       inputSchema: {
-        datasetId: z.string().describe('The unique dataset ID obtained from search_datasets or provided by the user'),
-        query: z.string().optional().describe('French keywords for full-text search across all dataset columns (simple keywords, not sentences). Do not use with filters parameter. Examples: "Jean Dupont", "Paris", "2025"'),
+        datasetId: z.string().describe('The exact dataset ID from the "id" field in search_datasets results. Do not use the title or slug.'),
+        query: z.string().optional().describe('French keywords for full-text search across all dataset columns (simple keywords, not sentences). Can be combined with filters, but prefer filters alone when criteria target specific columns. Use query for broad keyword matching across all columns. Examples: "Jean Dupont", "Paris", "2025"'),
         filters: filtersSchema,
         select: z.string().optional().describe('Optional comma-separated list of column keys to include in the results. Useful when the dataset has many columns to reduce output size. If not provided, all columns are returned. Use column keys from describe_dataset. Format: column1,column2,column3 (No spaces after commas). Example: "nom,age,ville"'),
+        sort: z.string().optional().describe('Sort order for results. Comma-separated list of column keys. Prefix with - for descending order. Special keys: _score (relevance), _i (index order), _updatedAt, _rand (random). Examples: "population" (ascending), "-population" (descending), "city,-population" (city asc then population desc)'),
         size: z.number().optional().describe('Number of rows to return per page (default: 10, max: 50). Increase when you know you need more results upfront to avoid multiple pagination round-trips.'),
-        next: z.string().optional().describe('URL from a previous search_data response to fetch the next page of results. When provided, all other parameters (query, filters, select, size) are ignored since the URL already contains them.')
+        next: z.string().optional().describe('URL from a previous search_data response to fetch the next page of results. When provided, all other parameters (query, filters, select, sort, size) are ignored since the URL already contains them.')
       },
       outputSchema: {
         datasetId: z.string().describe('The dataset ID that was searched'),
@@ -33,8 +34,8 @@ export default (server: McpServer) => {
         readOnlyHint: true
       }
     },
-    async (params: { datasetId: string, query?: string, select?: string, filters?: Record<string, any>, size?: number, next?: string }, extra) => {
-      debug('Executing search_data tool with dataset:', params.datasetId, 'query:', params.query, 'select:', params.select, 'filters:', params.filters, 'size:', params.size, 'next:', params.next)
+    async (params: { datasetId: string, query?: string, select?: string, sort?: string, filters?: Record<string, any>, size?: number, next?: string }, extra) => {
+      debug('Executing search_data tool with dataset:', params.datasetId, 'query:', params.query, 'select:', params.select, 'sort:', params.sort, 'filters:', params.filters, 'size:', params.size, 'next:', params.next)
 
       let fetchUrlStr: string
       const baseUrl = getOrigin(extra.requestInfo?.headers)
@@ -61,7 +62,11 @@ export default (server: McpServer) => {
         }
 
         if (params.select) {
-          fetchUrl.searchParams.set('select', params.select)
+          fetchUrl.searchParams.set('select', params.select.split(',').map(s => s.trim()).join(','))
+        }
+
+        if (params.sort) {
+          fetchUrl.searchParams.set('sort', params.sort)
         }
 
         const size = Math.min(Math.max(params.size || 10, 1), 50)
@@ -83,31 +88,53 @@ export default (server: McpServer) => {
       if (params.select) {
         filteredViewUrlObj.searchParams.set('cols', params.select)
       }
+      if (params.sort) {
+        filteredViewUrlObj.searchParams.set('sort', params.sort)
+      }
 
-      const response = (await axios.get(
-        fetchUrlStr,
-        buildAxiosOptions(extra.requestInfo?.headers)
-      )).data
+      let response: any
+      try {
+        response = (await axios.get(
+          fetchUrlStr,
+          buildAxiosOptions(extra.requestInfo?.headers)
+        )).data
+      } catch (err: any) {
+        handleApiError(err)
+      }
 
       const structuredContent: Record<string, any> = {
         datasetId: params.datasetId,
         count: response.total,
         filteredViewUrl: filteredViewUrlObj.toString(),
-        lines: response.results
+        lines: response.results.map((line: any) => {
+          const { _id, _i, _rand, ...clean } = line
+          return clean
+        })
       }
 
       if (response.next) {
         structuredContent.next = response.next
       }
 
+      const resultCount = structuredContent.lines.length
+      const csvData = toCSV(structuredContent.lines).trimEnd()
+
+      const headerBlock = [
+        `${resultCount} results (${structuredContent.count} total)`,
+        `Filtered view: ${structuredContent.filteredViewUrl}`
+      ].join('\n')
+
+      const sections = [headerBlock, csvData]
+
+      if (structuredContent.next) {
+        sections.push('Next page available.')
+      }
+
+      const text = formatTextOutput(sections)
+
       return {
         structuredContent,
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(structuredContent),
-          }
-        ]
+        content: [{ type: 'text', text }]
       }
     }
   )
