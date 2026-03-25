@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
-import { getOrigin, buildAxiosOptions, encodeDatasetId, filtersSchema, bboxSchema, geoDistanceSchema, applyGeoParams, handleApiError, formatTextOutput } from './_utils.ts'
+import { getOrigin, buildAxiosOptions, encodeDatasetId, filtersSchema, bboxSchema, geoDistanceSchema, dateMatchSchema, applyGeoParams, applyDateMatchParam, handleApiError, formatTextOutput } from './_utils.ts'
 
 const debug = Debug('datasets-tools')
 
@@ -37,6 +37,7 @@ export default (server: McpServer) => {
         filters: filtersSchema,
         bbox: bboxSchema,
         geoDistance: geoDistanceSchema,
+        dateMatch: dateMatchSchema,
         sort: z.string().optional().describe('Sort order for aggregation results. Use special keys: "count" or "-count" (by row count asc/desc), "key" or "-key" (by column value asc/desc), "metric" or "-metric" (by metric value asc/desc). Default: sorts by metric desc (if metric specified), then count desc. Example: "-count" to sort by most frequent values first')
       },
       outputSchema: {
@@ -51,7 +52,7 @@ export default (server: McpServer) => {
         readOnlyHint: true
       }
     },
-    async (params: { datasetId: string, groupByColumns: string[], metric?: { column: string, type: 'sum' | 'avg' | 'min' | 'max' | 'count' }, filters?: Record<string, string>, bbox?: string, geoDistance?: string, sort?: string }, extra) => {
+    async (params: { datasetId: string, groupByColumns: string[], metric?: { column: string, type: 'sum' | 'avg' | 'min' | 'max' | 'count' }, filters?: Record<string, string>, bbox?: string, geoDistance?: string, dateMatch?: string, sort?: string }, extra) => {
       debug('Executing aggregate_data tool with dataset:', params.datasetId, 'columns:', params.groupByColumns, 'metric:', JSON.stringify(params.metric))
 
       const fetchUrl = new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/values_agg`, getOrigin(extra.requestInfo?.headers))
@@ -69,6 +70,7 @@ export default (server: McpServer) => {
       }
 
       applyGeoParams(fetchUrl, params.bbox, params.geoDistance)
+      applyDateMatchParam(fetchUrl, params.dateMatch)
 
       if (params.sort) {
         fetchUrl.searchParams.set('sort', params.sort)

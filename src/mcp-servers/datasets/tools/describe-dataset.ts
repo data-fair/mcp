@@ -49,6 +49,11 @@ export default (server: McpServer) => {
         ).describe('Dataset column schema with types and metadata'),
         geolocalized: z.boolean().optional().describe('Whether this dataset has geographic data. When true, geo filters (bbox, geoDistance) are available in search_data, aggregate_data, and calculate_metric.'),
         bbox: z.array(z.number()).optional().describe('Spatial bounding box of the dataset: [lonMin, latMin, lonMax, latMax]. Present only for geolocalized datasets.'),
+        temporalDataset: z.boolean().optional().describe('Whether this dataset has temporal data (date fields). When true, the dateMatch filter is available in search_data, aggregate_data, and calculate_metric.'),
+        timePeriod: z.object({
+          startDate: z.string().describe('Start of the temporal coverage (ISO datetime)'),
+          endDate: z.string().describe('End of the temporal coverage (ISO datetime)')
+        }).optional().describe('Temporal coverage of the dataset data. Present only for temporal datasets.'),
         sampleLines: z.array(z.record(z.any())).describe(
           'Array of 3 sample data rows showing real values from the dataset. Use these examples to understand exact formatting, casing, and typical values for _eq and _search filters.'
         )
@@ -97,6 +102,11 @@ export default (server: McpServer) => {
       if (Array.isArray(fetchedData.bbox) && fetchedData.bbox.length > 0) {
         dataset.geolocalized = true
         dataset.bbox = fetchedData.bbox
+      }
+
+      if (fetchedData.timePeriod) {
+        dataset.temporalDataset = true
+        dataset.timePeriod = fetchedData.timePeriod
       }
 
       if (fetchedData.schema) {
@@ -159,6 +169,7 @@ export default (server: McpServer) => {
       if (dataset.spatial) metadataLines.push(`Spatial: ${typeof dataset.spatial === 'string' ? dataset.spatial : JSON.stringify(dataset.spatial)}`)
       if (dataset.temporal) metadataLines.push(`Temporal: ${typeof dataset.temporal === 'string' ? dataset.temporal : JSON.stringify(dataset.temporal)}`)
       if (dataset.geolocalized) metadataLines.push(`Geolocalized: yes (bbox: [${dataset.bbox.join(', ')}]). Geo filters (bbox, geoDistance) are available in search_data, aggregate_data, and calculate_metric.`)
+      if (dataset.temporalDataset) metadataLines.push(`Temporal dataset: yes (${dataset.timePeriod.startDate} to ${dataset.timePeriod.endDate}). The dateMatch filter is available in search_data, aggregate_data, and calculate_metric.`)
 
       let descriptionSection = ''
       if (dataset.description) {

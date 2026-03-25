@@ -213,6 +213,58 @@ describe('describe_dataset', () => {
     assert.ok(!text.includes('Geolocalized'))
   })
 
+  it('should detect temporal dataset with timePeriod', async () => {
+    routes['/datasets/temporal1/lines'] = () => ({
+      results: [{ _id: 'a', _i: 1, _rand: 1, date: '2023-06-15' }]
+    })
+    routes['/datasets/temporal1'] = (url) => {
+      if (url.pathname.includes('/lines')) return undefined
+      return {
+        id: 'temporal1',
+        title: 'Données temporelles',
+        page: 'https://example.com/datasets/temporal1',
+        count: 200,
+        timePeriod: { startDate: '2023-01-01T00:00:00.000Z', endDate: '2023-12-31T23:59:59.999Z' },
+        schema: [
+          { key: 'date', type: 'string', 'x-refersTo': 'http://schema.org/Date' }
+        ]
+      }
+    }
+
+    const result = await client.callTool({ name: 'describe_dataset', arguments: { datasetId: 'temporal1' } })
+    const sc = result.structuredContent as any
+
+    assert.equal(sc.temporalDataset, true)
+    assert.deepEqual(sc.timePeriod, { startDate: '2023-01-01T00:00:00.000Z', endDate: '2023-12-31T23:59:59.999Z' })
+
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('Temporal dataset: yes'))
+    assert.ok(text.includes('dateMatch'))
+  })
+
+  it('should not set temporalDataset for non-temporal dataset', async () => {
+    routes['/datasets/nontemporal/lines'] = () => ({ results: [{ nom: 'test' }] })
+    routes['/datasets/nontemporal'] = (url) => {
+      if (url.pathname.includes('/lines')) return undefined
+      return {
+        id: 'nontemporal',
+        title: 'Non temporal',
+        page: 'https://example.com/datasets/nontemporal',
+        count: 10,
+        schema: [{ key: 'nom', type: 'string' }]
+      }
+    }
+
+    const result = await client.callTool({ name: 'describe_dataset', arguments: { datasetId: 'nontemporal' } })
+    const sc = result.structuredContent as any
+
+    assert.equal(sc.temporalDataset, undefined)
+    assert.equal(sc.timePeriod, undefined)
+
+    const text = (result.content as any)[0].text
+    assert.ok(!text.includes('Temporal dataset'))
+  })
+
   it('should truncate large enum arrays', async () => {
     const largeEnum = Array.from({ length: 50 }, (_, i) => `val${i}`)
     routes['/datasets/ds2/lines'] = () => ({ results: [{ code: 'val0' }] })
@@ -467,6 +519,21 @@ describe('search_data', () => {
     assert.ok(sc.filteredViewUrl.includes('geo_distance='))
   })
 
+  it('should pass dateMatch parameter', async () => {
+    routes['/datasets/ds1/lines'] = (url) => {
+      assert.equal(url.searchParams.get('date_match'), '2023-11-21')
+      return { total: 2, results: [{ nom: 'ACME', ville: 'Paris' }] }
+    }
+
+    const result = await client.callTool({
+      name: 'search_data',
+      arguments: { datasetId: 'ds1', dateMatch: '2023-11-21' }
+    })
+    const sc = result.structuredContent as any
+    assert.equal(sc.count, 2)
+    assert.ok(sc.filteredViewUrl.includes('date_match='))
+  })
+
   it('should trim spaces in select parameter', async () => {
     routes['/datasets/ds1/lines'] = (url) => {
       assert.equal(url.searchParams.get('select'), 'nom,ville,age')
@@ -608,6 +675,18 @@ describe('aggregate_data', () => {
     })
   })
 
+  it('should pass dateMatch parameter', async () => {
+    routes['/datasets/ds1/values_agg'] = (url) => {
+      assert.equal(url.searchParams.get('date_match'), '2023-01-01,2023-12-31')
+      return { total: 10, total_values: 2, total_other: 0, aggs: [] }
+    }
+
+    await client.callTool({
+      name: 'aggregate_data',
+      arguments: { datasetId: 'ds1', groupByColumns: ['ville'], dateMatch: '2023-01-01,2023-12-31' }
+    })
+  })
+
   it('should not send metric params when metric is count', async () => {
     routes['/datasets/ds1/values_agg'] = (url) => {
       assert.equal(url.searchParams.get('metric'), null, 'count metric should not add metric param')
@@ -725,6 +804,20 @@ describe('calculate_metric', () => {
     })
     const sc = result.structuredContent as any
     assert.equal(sc.value, 35000)
+  })
+
+  it('should pass dateMatch parameter', async () => {
+    routes['/datasets/ds1/metric_agg'] = (url) => {
+      assert.equal(url.searchParams.get('date_match'), '2023-06-15')
+      return { total: 100, metric: 42000 }
+    }
+
+    const result = await client.callTool({
+      name: 'calculate_metric',
+      arguments: { datasetId: 'ds1', fieldKey: 'salaire', metric: 'avg', dateMatch: '2023-06-15' }
+    })
+    const sc = result.structuredContent as any
+    assert.equal(sc.value, 42000)
   })
 
   it('should pass filters and percents', async () => {

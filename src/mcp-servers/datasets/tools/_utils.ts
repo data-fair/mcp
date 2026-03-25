@@ -63,9 +63,17 @@ export const geoDistanceSchema = z.string()
   .optional()
   .describe('Geographic proximity filter (only for geolocalized datasets). Restricts results to within a distance from a point. Format: "lon,lat,distance". Example: "2.35,48.85,10km". Use distance "0" for point-in-polygon containment.')
 
+export const dateMatchSchema = z.string()
+  .optional()
+  .describe('Temporal filter (only for temporal datasets with date fields). Accepts a single date "YYYY-MM-DD" to match that day, or a date range "YYYY-MM-DD,YYYY-MM-DD" to match an overlapping period. ISO datetimes also accepted. Example: "2023-11-21" or "2023-01-01,2023-12-31".')
+
 export const applyGeoParams = (url: URL, bbox?: string, geoDistance?: string) => {
   if (bbox) url.searchParams.set('bbox', bbox)
   if (geoDistance) url.searchParams.set('geo_distance', geoDistance)
+}
+
+export const applyDateMatchParam = (url: URL, dateMatch?: string) => {
+  if (dateMatch) url.searchParams.set('date_match', dateMatch)
 }
 
 /**

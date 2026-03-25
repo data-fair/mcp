@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
-import { getOrigin, buildAxiosOptions, encodeDatasetId, filtersSchema, bboxSchema, geoDistanceSchema, applyGeoParams, handleApiError } from './_utils.ts'
+import { getOrigin, buildAxiosOptions, encodeDatasetId, filtersSchema, bboxSchema, geoDistanceSchema, dateMatchSchema, applyGeoParams, applyDateMatchParam, handleApiError } from './_utils.ts'
 
 const debug = Debug('datasets-tools')
 
@@ -20,7 +20,8 @@ export default (server: McpServer) => {
         percents: z.string().optional().describe('Comma-separated percentages for percentiles metric (default: "1,5,25,50,75,95,99"). Only used when metric is "percentiles".'),
         filters: filtersSchema,
         bbox: bboxSchema,
-        geoDistance: geoDistanceSchema
+        geoDistance: geoDistanceSchema,
+        dateMatch: dateMatchSchema
       },
       outputSchema: {
         datasetId: z.string().describe('The dataset ID that was queried'),
@@ -33,7 +34,7 @@ export default (server: McpServer) => {
         readOnlyHint: true
       }
     },
-    async (params: { datasetId: string, fieldKey: string, metric: string, percents?: string, filters?: Record<string, string>, bbox?: string, geoDistance?: string }, extra) => {
+    async (params: { datasetId: string, fieldKey: string, metric: string, percents?: string, filters?: Record<string, string>, bbox?: string, geoDistance?: string, dateMatch?: string }, extra) => {
       debug('Executing calculate_metric tool with dataset:', params.datasetId, 'field:', params.fieldKey, 'metric:', params.metric)
 
       const fetchUrl = new URL(
@@ -51,6 +52,7 @@ export default (server: McpServer) => {
       }
 
       applyGeoParams(fetchUrl, params.bbox, params.geoDistance)
+      applyDateMatchParam(fetchUrl, params.dateMatch)
 
       let response: any
       try {
