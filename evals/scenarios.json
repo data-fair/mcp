@@ -53,5 +53,10 @@
     "id": "pagination",
     "question": "Liste-moi 20 communes françaises à partir des données de opendata.koumoul.com. Utilise la pagination pour obtenir plus de résultats que la première page.",
     "expected": "Should find a communes dataset, use search_data to get first page (10 results), then use the next field from the response to fetch a second page. Answer should contain approximately 20 commune names, demonstrating that pagination was used."
+  },
+  {
+    "id": "geocode-address",
+    "question": "Quelles sont les coordonnées géographiques de la mairie de Bordeaux ? Utilise le géocodage.",
+    "expected": "Should use geocode_address tool with a query like 'mairie de Bordeaux'. Answer should contain latitude and longitude coordinates near Bordeaux (approx. 44.8, -0.57)."
   }
 ]
