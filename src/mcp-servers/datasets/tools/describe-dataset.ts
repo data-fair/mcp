@@ -141,7 +141,7 @@ export default (server: McpServer) => {
       const sampleUrl = new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/lines`, baseUrl)
       sampleUrl.searchParams.set('size', '3')
 
-      let sampleLines: any[]
+      let sampleLines: any[] | undefined
       try {
         sampleLines = (await axios.get(
           sampleUrl.toString(),
