@@ -115,7 +115,7 @@ export default (server: McpServer) => {
         datasetId: params.datasetId,
         count: response.total,
         filteredViewUrl: filteredViewUrlObj.toString(),
-        lines: response.results.map((line: any) => {
+        lines: (response.results ?? []).map((line: any) => {
           const { _id, _i, _rand, ...clean } = line
           return clean
         })

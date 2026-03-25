@@ -49,7 +49,7 @@ export default (server: McpServer) => {
       }
 
       const structuredContent = {
-        datasets: fetchedData.results.map((dataset: any) => {
+        datasets: (fetchedData.results ?? []).map((dataset: any) => {
           const result: any = {
             id: dataset.id,
             title: dataset.title,

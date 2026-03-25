@@ -103,7 +103,7 @@ export default (server: McpServer) => {
         nonRepresented: response.total_other,
         datasetId: params.datasetId,
         requestUrl: fetchUrl.toString(),
-        aggregations: response.aggs.map(mapAggregation)
+        aggregations: (response.aggs ?? []).map(mapAggregation)
       }
 
       const formatAggLine = (agg: any, metric: typeof params.metric, indent: string): string => {

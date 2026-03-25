@@ -150,7 +150,7 @@ export default (server: McpServer) => {
       } catch (err: any) {
         handleApiError(err) // always throws
       }
-      dataset.sampleLines = sampleLines!.map((line: any) => {
+      dataset.sampleLines = (sampleLines ?? []).map((line: any) => {
         const { _id, _i, _rand, ...clean } = line
         return clean
       })
