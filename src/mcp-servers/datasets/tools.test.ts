@@ -476,6 +476,54 @@ describe('search_data', () => {
     assert.ok(sc.filteredViewUrl.includes('sort=population'))
   })
 
+  it('should drop incomplete _geo_distance sort without coordinates', async () => {
+    routes['/datasets/ds1/lines'] = (url) => {
+      assert.equal(url.searchParams.get('sort'), null)
+      return { total: 1, results: [{ nom: 'A' }] }
+    }
+
+    await client.callTool({
+      name: 'search_data',
+      arguments: { datasetId: 'ds1', sort: '_geo_distance', geoDistance: '2.35,48.85,10km' }
+    })
+  })
+
+  it('should drop incomplete -_geo_distance sort without coordinates', async () => {
+    routes['/datasets/ds1/lines'] = (url) => {
+      assert.equal(url.searchParams.get('sort'), null)
+      return { total: 1, results: [{ nom: 'A' }] }
+    }
+
+    await client.callTool({
+      name: 'search_data',
+      arguments: { datasetId: 'ds1', sort: '-_geo_distance' }
+    })
+  })
+
+  it('should drop incomplete _geo_distance in mixed sort fields', async () => {
+    routes['/datasets/ds1/lines'] = (url) => {
+      assert.equal(url.searchParams.get('sort'), 'population')
+      return { total: 1, results: [{ nom: 'A' }] }
+    }
+
+    await client.callTool({
+      name: 'search_data',
+      arguments: { datasetId: 'ds1', sort: 'population,-_geo_distance', geoDistance: '2.35,48.85,5km' }
+    })
+  })
+
+  it('should pass through already-complete _geo_distance:lon:lat sort', async () => {
+    routes['/datasets/ds1/lines'] = (url) => {
+      assert.equal(url.searchParams.get('sort'), '_geo_distance:2.35:48.85')
+      return { total: 1, results: [{ nom: 'A' }] }
+    }
+
+    await client.callTool({
+      name: 'search_data',
+      arguments: { datasetId: 'ds1', sort: '_geo_distance:2.35:48.85' }
+    })
+  })
+
   it('should pass select parameter', async () => {
     routes['/datasets/ds1/lines'] = (url) => {
       assert.ok(url.searchParams.get('select')?.includes('nom'))

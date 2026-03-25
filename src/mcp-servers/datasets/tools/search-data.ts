@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
-import { getOrigin, buildAxiosOptions, encodeDatasetId, filtersSchema, bboxSchema, geoDistanceSchema, dateMatchSchema, applyGeoParams, applyDateMatchParam, handleApiError, formatTextOutput } from './_utils.ts'
+import { getOrigin, buildAxiosOptions, encodeDatasetId, filtersSchema, bboxSchema, geoDistanceSchema, dateMatchSchema, applyGeoParams, applyDateMatchParam, normalizeSort, handleApiError, formatTextOutput } from './_utils.ts'
 import { stringify as csvStringify } from 'csv-stringify/sync'
 
 const debug = Debug('datasets-tools')
@@ -43,6 +43,7 @@ export default (server: McpServer) => {
 
       let fetchUrlStr: string
       const baseUrl = getOrigin(extra.requestInfo?.headers)
+      const normalizedSort = params.sort ? normalizeSort(params.sort) : undefined
 
       if (params.next) {
         const nextUrl = new URL(params.next)
@@ -72,8 +73,8 @@ export default (server: McpServer) => {
           fetchUrl.searchParams.set('select', params.select.split(',').map(s => s.trim()).join(','))
         }
 
-        if (params.sort) {
-          fetchUrl.searchParams.set('sort', params.sort)
+        if (normalizedSort) {
+          fetchUrl.searchParams.set('sort', normalizedSort)
         }
 
         const size = Math.min(Math.max(params.size || 10, 1), 50)
@@ -97,8 +98,8 @@ export default (server: McpServer) => {
       if (params.select) {
         filteredViewUrlObj.searchParams.set('cols', params.select)
       }
-      if (params.sort) {
-        filteredViewUrlObj.searchParams.set('sort', params.sort)
+      if (normalizedSort) {
+        filteredViewUrlObj.searchParams.set('sort', normalizedSort)
       }
 
       let response: any

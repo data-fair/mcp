@@ -84,6 +84,19 @@ export const formatTextOutput = (sections: string[]): string => {
 }
 
 /**
+ * Drop incomplete _geo_distance sort entries (without :lon:lat suffix).
+ * LLMs sometimes write sort: "_geo_distance" redundantly when a geoDistance filter is already present.
+ * The API already auto-sorts by distance when a geo_distance filter is set.
+ */
+export const normalizeSort = (sort: string): string => {
+  return sort.split(',').map(part => {
+    const trimmed = part.trim()
+    if (/^-?_geo_distance$/.test(trimmed)) return null
+    return trimmed
+  }).filter(Boolean).join(',')
+}
+
+/**
  * Wraps API errors with user-friendly messages to help models recover.
  */
 export const handleApiError = (err: any): never => {
