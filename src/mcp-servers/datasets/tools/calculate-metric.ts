@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
-import { getOrigin, buildAxiosOptions, encodeDatasetId, filtersSchema, handleApiError } from './_utils.ts'
+import { getOrigin, buildAxiosOptions, encodeDatasetId, filtersSchema, bboxSchema, geoDistanceSchema, applyGeoParams, handleApiError } from './_utils.ts'
 
 const debug = Debug('datasets-tools')
 
@@ -18,7 +18,9 @@ export default (server: McpServer) => {
         metric: z.enum(['avg', 'sum', 'min', 'max', 'stats', 'value_count', 'cardinality', 'percentiles'])
           .describe('Metric to calculate. Available: avg, sum, min, max (for numbers); min, max, cardinality, value_count (for strings); value_count (for others); stats returns count/min/max/avg/sum; percentiles returns distribution.'),
         percents: z.string().optional().describe('Comma-separated percentages for percentiles metric (default: "1,5,25,50,75,95,99"). Only used when metric is "percentiles".'),
-        filters: filtersSchema
+        filters: filtersSchema,
+        bbox: bboxSchema,
+        geoDistance: geoDistanceSchema
       },
       outputSchema: {
         datasetId: z.string().describe('The dataset ID that was queried'),
@@ -31,7 +33,7 @@ export default (server: McpServer) => {
         readOnlyHint: true
       }
     },
-    async (params: { datasetId: string, fieldKey: string, metric: string, percents?: string, filters?: Record<string, string> }, extra) => {
+    async (params: { datasetId: string, fieldKey: string, metric: string, percents?: string, filters?: Record<string, string>, bbox?: string, geoDistance?: string }, extra) => {
       debug('Executing calculate_metric tool with dataset:', params.datasetId, 'field:', params.fieldKey, 'metric:', params.metric)
 
       const fetchUrl = new URL(
@@ -47,6 +49,8 @@ export default (server: McpServer) => {
           fetchUrl.searchParams.set(key, String(value))
         }
       }
+
+      applyGeoParams(fetchUrl, params.bbox, params.geoDistance)
 
       let response: any
       try {

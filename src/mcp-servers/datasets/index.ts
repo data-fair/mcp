@@ -48,6 +48,14 @@ Prefer filters over the \`query\` parameter when the question involves multiple 
 Use sample rows from describe_dataset to understand exact value formatting before filtering.
 Use get_field_values to discover possible values before applying _eq or _in filters.
 
+## Geo Filters (search_data, aggregate_data & calculate_metric)
+When describe_dataset indicates a dataset is geolocalized, you can use:
+- **bbox**: restrict to a bounding box — \`"lonMin,latMin,lonMax,latMax"\`
+- **geoDistance**: restrict to a radius around a point — \`"lon,lat,distance"\` (e.g. \`"2.35,48.85,10km"\`)
+  Use distance \`0\` for point-in-polygon containment (is this point inside a shape?).
+
+In search_data, you can sort by distance with: \`sort: "_geo_distance:lon:lat"\` (closest first).
+
 ## Citations
 Always include in your responses:
 - The **dataset page link** (from search_datasets or describe_dataset)

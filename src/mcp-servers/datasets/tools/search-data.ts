@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
-import { getOrigin, buildAxiosOptions, encodeDatasetId, filtersSchema, handleApiError, formatTextOutput } from './_utils.ts'
+import { getOrigin, buildAxiosOptions, encodeDatasetId, filtersSchema, bboxSchema, geoDistanceSchema, applyGeoParams, handleApiError, formatTextOutput } from './_utils.ts'
 import { stringify as csvStringify } from 'csv-stringify/sync'
 
 const debug = Debug('datasets-tools')
@@ -17,8 +17,10 @@ export default (server: McpServer) => {
         datasetId: z.string().describe('The exact dataset ID from the "id" field in search_datasets results. Do not use the title or slug.'),
         query: z.string().optional().describe('French keywords for full-text search across all dataset columns (simple keywords, not sentences). Can be combined with filters, but prefer filters alone when criteria target specific columns. Use query for broad keyword matching across all columns. Examples: "Jean Dupont", "Paris", "2025"'),
         filters: filtersSchema,
+        bbox: bboxSchema,
+        geoDistance: geoDistanceSchema,
         select: z.string().optional().describe('Optional comma-separated list of column keys to include in the results. Useful when the dataset has many columns to reduce output size. If not provided, all columns are returned. Use column keys from describe_dataset. Format: column1,column2,column3 (No spaces after commas). Example: "nom,age,ville"'),
-        sort: z.string().optional().describe('Sort order for results. Comma-separated list of column keys. Prefix with - for descending order. Special keys: _score (relevance), _i (index order), _updatedAt, _rand (random). Examples: "population" (ascending), "-population" (descending), "city,-population" (city asc then population desc)'),
+        sort: z.string().optional().describe('Sort order for results. Comma-separated list of column keys. Prefix with - for descending order. Special keys: _score (relevance), _i (index order), _updatedAt, _rand (random), _geo_distance:lon:lat (distance from point, for geolocalized datasets). Examples: "population" (ascending), "-population" (descending), "_geo_distance:2.35:48.85" (closest first)'),
         size: z.number().optional().describe('Number of rows to return per page (default: 10, max: 50). Increase when you know you need more results upfront to avoid multiple pagination round-trips.'),
         next: z.string().optional().describe('URL from a previous search_data response to fetch the next page of results. When provided, all other parameters (query, filters, select, sort, size) are ignored since the URL already contains them.')
       },
@@ -35,7 +37,7 @@ export default (server: McpServer) => {
         readOnlyHint: true
       }
     },
-    async (params: { datasetId: string, query?: string, select?: string, sort?: string, filters?: Record<string, any>, size?: number, next?: string }, extra) => {
+    async (params: { datasetId: string, query?: string, select?: string, sort?: string, filters?: Record<string, any>, bbox?: string, geoDistance?: string, size?: number, next?: string }, extra) => {
       debug('Executing search_data tool with dataset:', params.datasetId, 'query:', params.query, 'select:', params.select, 'sort:', params.sort, 'filters:', params.filters, 'size:', params.size, 'next:', params.next)
 
       let fetchUrlStr: string
@@ -62,6 +64,8 @@ export default (server: McpServer) => {
           }
         }
 
+        applyGeoParams(fetchUrl, params.bbox, params.geoDistance)
+
         if (params.select) {
           fetchUrl.searchParams.set('select', params.select.split(',').map(s => s.trim()).join(','))
         }
@@ -86,6 +90,7 @@ export default (server: McpServer) => {
           filteredViewUrlObj.searchParams.set(key, String(value))
         }
       }
+      applyGeoParams(filteredViewUrlObj, params.bbox, params.geoDistance)
       if (params.select) {
         filteredViewUrlObj.searchParams.set('cols', params.select)
       }

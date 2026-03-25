@@ -47,6 +47,8 @@ export default (server: McpServer) => {
             concept: z.string().optional().describe('Semantic concept associated with the column')
           })
         ).describe('Dataset column schema with types and metadata'),
+        geolocalized: z.boolean().optional().describe('Whether this dataset has geographic data. When true, geo filters (bbox, geoDistance) are available in search_data, aggregate_data, and calculate_metric.'),
+        bbox: z.array(z.number()).optional().describe('Spatial bounding box of the dataset: [lonMin, latMin, lonMax, latMax]. Present only for geolocalized datasets.'),
         sampleLines: z.array(z.record(z.any())).describe(
           'Array of 3 sample data rows showing real values from the dataset. Use these examples to understand exact formatting, casing, and typical values for _eq and _search filters.'
         )
@@ -91,6 +93,11 @@ export default (server: McpServer) => {
       if (fetchedData.spatial) dataset.spatial = fetchedData.spatial
       if (fetchedData.temporal) dataset.temporal = fetchedData.temporal
       if (fetchedData.frequency) dataset.frequency = fetchedData.frequency
+
+      if (Array.isArray(fetchedData.bbox) && fetchedData.bbox.length > 0) {
+        dataset.geolocalized = true
+        dataset.bbox = fetchedData.bbox
+      }
 
       if (fetchedData.schema) {
         dataset.schema = fetchedData.schema
@@ -151,6 +158,7 @@ export default (server: McpServer) => {
       if (dataset.frequency) metadataLines.push(`Frequency: ${dataset.frequency}`)
       if (dataset.spatial) metadataLines.push(`Spatial: ${typeof dataset.spatial === 'string' ? dataset.spatial : JSON.stringify(dataset.spatial)}`)
       if (dataset.temporal) metadataLines.push(`Temporal: ${typeof dataset.temporal === 'string' ? dataset.temporal : JSON.stringify(dataset.temporal)}`)
+      if (dataset.geolocalized) metadataLines.push(`Geolocalized: yes (bbox: [${dataset.bbox.join(', ')}]). Geo filters (bbox, geoDistance) are available in search_data, aggregate_data, and calculate_metric.`)
 
       let descriptionSection = ''
       if (dataset.description) {

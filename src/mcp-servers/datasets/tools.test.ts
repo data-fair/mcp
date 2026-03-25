@@ -158,6 +158,61 @@ describe('describe_dataset', () => {
     assert.ok(!text.startsWith('{'))  // No JSON
   })
 
+  it('should detect geolocalized dataset with bbox', async () => {
+    routes['/datasets/geo1/lines'] = () => ({
+      results: [{ _id: 'a', _i: 1, _rand: 1, nom: 'Mairie', lat: 48.85, lon: 2.35 }]
+    })
+    routes['/datasets/geo1'] = (url) => {
+      if (url.pathname.includes('/lines')) return undefined
+      return {
+        id: 'geo1',
+        title: 'Points géo',
+        page: 'https://example.com/datasets/geo1',
+        count: 500,
+        bbox: [-5.14, 41.33, 9.56, 51.09],
+        schema: [
+          { key: 'nom', type: 'string', title: 'Nom' },
+          { key: 'lat', type: 'number' },
+          { key: 'lon', type: 'number' }
+        ]
+      }
+    }
+
+    const result = await client.callTool({ name: 'describe_dataset', arguments: { datasetId: 'geo1' } })
+    const sc = result.structuredContent as any
+
+    assert.equal(sc.geolocalized, true)
+    assert.deepEqual(sc.bbox, [-5.14, 41.33, 9.56, 51.09])
+
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('Geolocalized: yes'))
+    assert.ok(text.includes('bbox:'))
+    assert.ok(text.includes('Geo filters'))
+  })
+
+  it('should not set geolocalized for non-geo dataset', async () => {
+    routes['/datasets/nongeo/lines'] = () => ({ results: [{ nom: 'test' }] })
+    routes['/datasets/nongeo'] = (url) => {
+      if (url.pathname.includes('/lines')) return undefined
+      return {
+        id: 'nongeo',
+        title: 'Non geo',
+        page: 'https://example.com/datasets/nongeo',
+        count: 10,
+        schema: [{ key: 'nom', type: 'string' }]
+      }
+    }
+
+    const result = await client.callTool({ name: 'describe_dataset', arguments: { datasetId: 'nongeo' } })
+    const sc = result.structuredContent as any
+
+    assert.equal(sc.geolocalized, undefined)
+    assert.equal(sc.bbox, undefined)
+
+    const text = (result.content as any)[0].text
+    assert.ok(!text.includes('Geolocalized'))
+  })
+
   it('should truncate large enum arrays', async () => {
     const largeEnum = Array.from({ length: 50 }, (_, i) => `val${i}`)
     routes['/datasets/ds2/lines'] = () => ({ results: [{ code: 'val0' }] })
@@ -382,6 +437,36 @@ describe('search_data', () => {
     assert.equal(sc.lines.length, 1)
   })
 
+  it('should pass bbox parameter', async () => {
+    routes['/datasets/ds1/lines'] = (url) => {
+      assert.equal(url.searchParams.get('bbox'), '-2.5,43,3,47')
+      return { total: 3, results: [{ nom: 'ACME', ville: 'Toulouse' }] }
+    }
+
+    const result = await client.callTool({
+      name: 'search_data',
+      arguments: { datasetId: 'ds1', bbox: '-2.5,43,3,47' }
+    })
+    const sc = result.structuredContent as any
+    assert.equal(sc.count, 3)
+    assert.ok(sc.filteredViewUrl.includes('bbox=-2.5'))
+  })
+
+  it('should pass geoDistance parameter', async () => {
+    routes['/datasets/ds1/lines'] = (url) => {
+      assert.equal(url.searchParams.get('geo_distance'), '2.35,48.85,10km')
+      return { total: 5, results: [{ nom: 'ACME', ville: 'Paris' }] }
+    }
+
+    const result = await client.callTool({
+      name: 'search_data',
+      arguments: { datasetId: 'ds1', geoDistance: '2.35,48.85,10km' }
+    })
+    const sc = result.structuredContent as any
+    assert.equal(sc.count, 5)
+    assert.ok(sc.filteredViewUrl.includes('geo_distance='))
+  })
+
   it('should trim spaces in select parameter', async () => {
     routes['/datasets/ds1/lines'] = (url) => {
       assert.equal(url.searchParams.get('select'), 'nom,ville,age')
@@ -510,6 +595,19 @@ describe('aggregate_data', () => {
     })
   })
 
+  it('should pass bbox and geoDistance parameters', async () => {
+    routes['/datasets/ds1/values_agg'] = (url) => {
+      assert.equal(url.searchParams.get('bbox'), '1,42,4,46')
+      assert.equal(url.searchParams.get('geo_distance'), '2.35,48.85,5km')
+      return { total: 10, total_values: 2, total_other: 0, aggs: [] }
+    }
+
+    await client.callTool({
+      name: 'aggregate_data',
+      arguments: { datasetId: 'ds1', groupByColumns: ['ville'], bbox: '1,42,4,46', geoDistance: '2.35,48.85,5km' }
+    })
+  })
+
   it('should not send metric params when metric is count', async () => {
     routes['/datasets/ds1/values_agg'] = (url) => {
       assert.equal(url.searchParams.get('metric'), null, 'count metric should not add metric param')
@@ -612,6 +710,21 @@ describe('calculate_metric', () => {
     assert.ok(text.includes('count=1000'))
     assert.ok(text.includes('min=18000'))
     assert.ok(text.includes('avg=48500'))
+  })
+
+  it('should pass bbox and geoDistance parameters', async () => {
+    routes['/datasets/ds1/metric_agg'] = (url) => {
+      assert.equal(url.searchParams.get('bbox'), '-1,43,3,47')
+      assert.equal(url.searchParams.get('geo_distance'), '2.35,48.85,20km')
+      return { total: 200, metric: 35000 }
+    }
+
+    const result = await client.callTool({
+      name: 'calculate_metric',
+      arguments: { datasetId: 'ds1', fieldKey: 'salaire', metric: 'avg', bbox: '-1,43,3,47', geoDistance: '2.35,48.85,20km' }
+    })
+    const sc = result.structuredContent as any
+    assert.equal(sc.value, 35000)
   })
 
   it('should pass filters and percents', async () => {

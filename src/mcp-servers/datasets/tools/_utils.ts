@@ -55,6 +55,19 @@ export const filtersSchema = z.record(
   z.string()
 ).optional().describe('Column filters as key-value pairs. Key format: column_key + suffix (see server instructions for available suffixes). All values must be strings, even for numbers/dates. If a column key has underscores (e.g., code_postal), just append the suffix: code_postal_eq. Example: { "nom_search": "Jean", "age_lte": "30", "ville_eq": "Paris" }')
 
+export const bboxSchema = z.string()
+  .optional()
+  .describe('Geographic bounding box filter (only for geolocalized datasets). Format: "lonMin,latMin,lonMax,latMax". Example: "-2.5,43,3,47".')
+
+export const geoDistanceSchema = z.string()
+  .optional()
+  .describe('Geographic proximity filter (only for geolocalized datasets). Restricts results to within a distance from a point. Format: "lon,lat,distance". Example: "2.35,48.85,10km". Use distance "0" for point-in-polygon containment.')
+
+export const applyGeoParams = (url: URL, bbox?: string, geoDistance?: string) => {
+  if (bbox) url.searchParams.set('bbox', bbox)
+  if (geoDistance) url.searchParams.set('geo_distance', geoDistance)
+}
+
 /**
  * Join non-empty text sections with blank lines.
  */
