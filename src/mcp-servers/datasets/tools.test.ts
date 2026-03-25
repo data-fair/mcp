@@ -1,9 +1,10 @@
-import { describe, it, before, after } from 'node:test'
+import { describe, it, before, after, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import nock from 'nock'
 import registerTools from './tools.ts'
 
 /**
@@ -843,5 +844,195 @@ describe('calculate_metric', () => {
     const text = (result.content as any)[0].text
     assert.ok(text.includes('25%=30000'))
     assert.ok(text.includes('50%=42000'))
+  })
+})
+
+describe('geocode_address', () => {
+  afterEach(() => {
+    nock.cleanAll()
+  })
+
+  it('should geocode an address and return structured results', async () => {
+    nock('https://data.geopf.fr')
+      .get('/geocodage/search')
+      .query({ q: '20 avenue de segur paris', limit: '5' })
+      .reply(200, {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [2.308628, 48.850699] },
+            properties: {
+              label: '20 Avenue de Ségur 75007 Paris',
+              score: 0.9716454545454545,
+              housenumber: '20',
+              id: '75107_8909_00020',
+              name: '20 Avenue de Ségur',
+              postcode: '75007',
+              citycode: '75107',
+              x: 649266.35,
+              y: 6861406.23,
+              city: 'Paris',
+              district: 'Paris 7e Arrondissement',
+              context: '75, Paris, Île-de-France',
+              type: 'housenumber',
+              importance: 0.6881,
+              street: 'Avenue de Ségur',
+              _type: 'address'
+            }
+          },
+          {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [2.305575, 48.847446] },
+            properties: {
+              label: 'Avenue de Ségur 75015 Paris',
+              score: 0.7738569960474307,
+              id: '75115_8909',
+              name: 'Avenue de Ségur',
+              postcode: '75015',
+              citycode: '75115',
+              x: 649039.14,
+              y: 6861046.5,
+              city: 'Paris',
+              district: 'Paris 15e Arrondissement',
+              context: '75, Paris, Île-de-France',
+              type: 'street',
+              importance: 0.68634,
+              street: 'Avenue de Ségur',
+              _type: 'address'
+            }
+          }
+        ],
+        query: '20 avenue de segur paris'
+      })
+
+    const result = await client.callTool({ name: 'geocode_address', arguments: { q: '20 avenue de segur paris' } })
+
+    const sc = result.structuredContent as any
+    assert.equal(sc.count, 2)
+    assert.equal(sc.results.length, 2)
+    assert.equal(sc.results[0].label, '20 Avenue de Ségur 75007 Paris')
+    assert.equal(sc.results[0].score, 0.9716454545454545)
+    assert.equal(sc.results[0].type, 'housenumber')
+    assert.equal(sc.results[0].postcode, '75007')
+    assert.equal(sc.results[0].city, 'Paris')
+    assert.equal(sc.results[0].citycode, '75107')
+    assert.equal(sc.results[0].longitude, 2.308628)
+    assert.equal(sc.results[0].latitude, 48.850699)
+    assert.equal(sc.results[0].context, '75, Paris, Île-de-France')
+    assert.equal(sc.results[1].label, 'Avenue de Ségur 75015 Paris')
+    assert.equal(sc.results[1].type, 'street')
+
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('2 result(s)'))
+    assert.ok(text.includes('20 Avenue de Ségur 75007 Paris'))
+    assert.ok(text.includes('Longitude: 2.308628'))
+    assert.ok(text.includes('Latitude: 48.850699'))
+    assert.ok(text.includes('Île-de-France'))
+    assert.ok(!text.startsWith('{'))
+  })
+
+  it('should return empty results when no features match', async () => {
+    nock('https://data.geopf.fr')
+      .get('/geocodage/search')
+      .query({ q: 'zzzznotanaddress', limit: '5' })
+      .reply(200, {
+        type: 'FeatureCollection',
+        features: [],
+        query: 'zzzznotanaddress'
+      })
+
+    const result = await client.callTool({ name: 'geocode_address', arguments: { q: 'zzzznotanaddress' } })
+
+    const sc = result.structuredContent as any
+    assert.equal(sc.count, 0)
+    assert.equal(sc.results.length, 0)
+
+    const text = (result.content as any)[0].text
+    assert.ok(text.includes('0 result(s)'))
+  })
+
+  it('should pass custom limit parameter', async () => {
+    nock('https://data.geopf.fr')
+      .get('/geocodage/search')
+      .query({ q: 'rue de rivoli', limit: '3' })
+      .reply(200, {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [3.092229, 50.635903] },
+            properties: {
+              label: 'Rue de Rivoli 59800 Lille',
+              score: 0.9815381818181819,
+              id: '59350_7519',
+              banId: '1170800a-13da-4140-befb-eedc6d9cdf79',
+              name: 'Rue de Rivoli',
+              postcode: '59800',
+              citycode: '59350',
+              x: 706535.87,
+              y: 7059885.84,
+              city: 'Lille',
+              context: '59, Nord, Hauts-de-France',
+              type: 'street',
+              importance: 0.79692,
+              street: 'Rue de Rivoli',
+              _type: 'address'
+            }
+          },
+          {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [7.258613, 43.696415] },
+            properties: {
+              label: 'Rue de Rivoli 06000 Nice',
+              score: 0.9762209090909091,
+              id: '06088_5495',
+              banId: '09b12796-4147-4ce0-b8b3-73b8ec1158ec',
+              name: 'Rue de Rivoli',
+              postcode: '06000',
+              citycode: '06088',
+              x: 1043220.1,
+              y: 6297855.58,
+              city: 'Nice',
+              context: '06, Alpes-Maritimes, Provence-Alpes-Côte d\'Azur',
+              type: 'street',
+              importance: 0.73843,
+              street: 'Rue de Rivoli',
+              _type: 'address'
+            }
+          },
+          {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [0.148337, 49.49961] },
+            properties: {
+              label: 'Rue de Rivoli 76600 Le Havre',
+              score: 0.9755127272727272,
+              id: '76351_6965',
+              banId: '837ecb39-670b-4c96-9025-46bca65f035f',
+              name: 'Rue de Rivoli',
+              postcode: '76600',
+              citycode: '76351',
+              x: 493390.68,
+              y: 6937093.24,
+              city: 'Le Havre',
+              context: '76, Seine-Maritime, Normandie',
+              type: 'street',
+              importance: 0.73064,
+              street: 'Rue de Rivoli',
+              _type: 'address'
+            }
+          }
+        ],
+        query: 'rue de rivoli'
+      })
+
+    const result = await client.callTool({ name: 'geocode_address', arguments: { q: 'rue de rivoli', limit: 3 } })
+
+    const sc = result.structuredContent as any
+    assert.equal(sc.count, 3)
+    assert.equal(sc.results[0].type, 'street')
+    assert.equal(sc.results[0].city, 'Lille')
+    assert.equal(sc.results[1].city, 'Nice')
+    assert.equal(sc.results[2].city, 'Le Havre')
   })
 })
