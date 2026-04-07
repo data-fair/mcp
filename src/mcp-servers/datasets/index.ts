@@ -18,7 +18,7 @@ const server = new McpServer({
   instructions: `You are querying French open data through Data Fair. Follow this workflow and these rules.
 
 ## Workflow
-1. **search_datasets** — find relevant datasets using French keywords (simple terms, not sentences). If 0 results, try synonyms or broader French terms. If many results, read titles and summaries to pick the most relevant.
+1. **list_datasets** — find relevant datasets using French keywords (simple terms, not sentences). If 0 results, try synonyms or broader French terms. If many results, read titles and summaries to pick the most relevant.
 2. **describe_dataset** — get the schema, sample rows, and metadata for a dataset. Always do this before querying data.
 3. Choose the right tool based on the question:
    - "Show me rows / find specific records / who / which" → **search_data**
@@ -58,7 +58,7 @@ In search_data, you can sort by distance with: \`sort: "_geo_distance:lon:lat"\`
 
 ## Citations
 Always include in your responses:
-- The **dataset page link** (from search_datasets or describe_dataset)
+- The **dataset page link** (from list_datasets or describe_dataset)
 - The **filtered view URL** (from search_data) when applicable
 - The **license** information (from describe_dataset) when available`,
   capabilities: {

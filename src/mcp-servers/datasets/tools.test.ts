@@ -62,8 +62,8 @@ after(async () => {
   await new Promise<void>(resolve => fakeApi.close(() => resolve()))
 })
 
-describe('search_datasets', () => {
-  it('should search datasets and return formatted results', async () => {
+describe('list_datasets', () => {
+  it('should list datasets and return formatted results', async () => {
     routes['/catalog/datasets'] = (url) => ({
       count: 2,
       results: [
@@ -72,25 +72,24 @@ describe('search_datasets', () => {
       ]
     })
 
-    const result = await client.callTool({ name: 'search_datasets', arguments: { query: 'entreprises' } })
+    const result = await client.callTool({ name: 'list_datasets', arguments: { q: 'entreprises' } })
 
     // Verify structuredContent
     const sc = result.structuredContent as any
     assert.equal(sc.count, 2)
-    assert.equal(sc.datasets.length, 2)
-    assert.equal(sc.datasets[0].id, 'ds1')
-    assert.equal(sc.datasets[0].title, 'Entreprises')
-    assert.equal(sc.datasets[0].summary, 'Liste des entreprises')
-    assert.equal(sc.datasets[0].link, 'https://example.com/datasets/ds1')
-    assert.equal(sc.datasets[1].summary, undefined)
+    assert.equal(sc.results.length, 2)
+    assert.equal(sc.results[0].id, 'ds1')
+    assert.equal(sc.results[0].title, 'Entreprises')
+    assert.equal(sc.results[0].summary, 'Liste des entreprises')
+    assert.equal(sc.results[0].page, 'https://example.com/datasets/ds1')
+    assert.equal(sc.results[1].summary, undefined)
 
     // Verify text format
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('2 datasets found.'))
-    assert.ok(text.includes('Entreprises (id: ds1)'))
-    assert.ok(text.includes('Liste des entreprises'))
-    assert.ok(text.includes('https://example.com/datasets/ds1'))
-    assert.ok(text.includes('Logements (id: ds2)'))
+    assert.ok(text.includes('**2** datasets found'))
+    assert.ok(text.includes('**Entreprises**'))
+    assert.ok(text.includes('ds1'))
+    assert.ok(text.includes('**Logements**'))
     assert.ok(!text.includes('{'))  // No JSON
   })
 })
@@ -146,14 +145,14 @@ describe('describe_dataset', () => {
 
     // Verify text format
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('Dataset: Entreprises'))
-    assert.ok(text.includes('ID: ds1'))
-    assert.ok(text.includes('Rows: 1000'))
-    assert.ok(text.includes('License: Open License'))
-    assert.ok(text.includes('Keywords: entreprise, siège'))
-    assert.ok(text.includes('- nom (string): Nom [concept: Nom entreprise]'))
-    assert.ok(text.includes('[labels: Paris=Paris, Lyon=Lyon]'))
-    assert.ok(text.includes('Sample data:'))
+    assert.ok(text.includes('# Entreprises'))
+    assert.ok(text.includes('**ID:**'))
+    assert.ok(text.includes('**Rows:** 1000'))
+    assert.ok(text.includes('**License:** Open License'))
+    assert.ok(text.includes('**Keywords:** entreprise, siège'))
+    assert.ok(text.includes('nom'))
+    assert.ok(text.includes('labels: Paris=Paris, Lyon=Lyon'))
+    assert.ok(text.includes('## Sample data'))
     assert.ok(text.includes('nom,ville'))
     assert.ok(text.includes('ACME,Paris'))
     assert.ok(!text.startsWith('{'))  // No JSON
@@ -186,7 +185,7 @@ describe('describe_dataset', () => {
     assert.deepEqual(sc.bbox, [-5.14, 41.33, 9.56, 51.09])
 
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('Geolocalized: yes'))
+    assert.ok(text.includes('**Geolocalized:** yes'))
     assert.ok(text.includes('bbox:'))
     assert.ok(text.includes('Geo filters'))
   })
@@ -239,7 +238,7 @@ describe('describe_dataset', () => {
     assert.deepEqual(sc.timePeriod, { startDate: '2023-01-01T00:00:00.000Z', endDate: '2023-12-31T23:59:59.999Z' })
 
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('Temporal dataset: yes'))
+    assert.ok(text.includes('**Temporal dataset:** yes'))
     assert.ok(text.includes('dateMatch'))
   })
 
@@ -319,8 +318,8 @@ describe('describe_dataset', () => {
     assert.ok(sc.description.endsWith('… (truncated, see dataset page for full description)'))
 
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('Description:'))
-    assert.ok(text.includes('truncated'))
+    assert.ok(text.includes('**Description:**'))
+    assert.ok(text.includes('…'))
   })
 })
 
@@ -344,20 +343,19 @@ describe('search_data', () => {
     // Verify structuredContent
     const sc = result.structuredContent as any
     assert.equal(sc.datasetId, 'ds1')
-    assert.equal(sc.count, 5)
-    assert.equal(sc.lines.length, 1)
-    assert.equal(sc.lines[0].nom, 'ACME')
-    assert.equal(sc.lines[0]._id, undefined)
-    assert.equal(sc.lines[0]._i, undefined)
-    assert.equal(sc.lines[0]._rand, undefined)
-    assert.equal(sc.lines[0]._score, 1.5)
+    assert.equal(sc.total, 5)
+    assert.equal(sc.results.length, 1)
+    assert.equal(sc.results[0].nom, 'ACME')
+    assert.equal(sc.results[0]._id, undefined)
+    assert.equal(sc.results[0]._i, undefined)
+    assert.equal(sc.results[0]._rand, undefined)
+    assert.equal(sc.results[0]._score, 1.5)
     assert.ok(sc.filteredViewUrl.includes('/datasets/ds1/full'))
     assert.ok(sc.filteredViewUrl.includes('q=ACME'))
 
     // Verify text format
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('1 results (5 total)'))
-    assert.ok(text.includes('Filtered view:'))
+    assert.ok(text.includes('**5** rows found'))
     assert.ok(text.includes('ACME,Paris'))
     assert.ok(text.includes('nom,ville,_score'))  // _score column present when query used
     assert.ok(!text.startsWith('{'))
@@ -374,7 +372,7 @@ describe('search_data', () => {
       arguments: { datasetId: 'ds1', filters: { ville_eq: 'Paris' } }
     })
     const sc = result.structuredContent as any
-    assert.equal(sc.count, 1)
+    assert.equal(sc.total, 1)
 
     // When no query is used, _score should not appear in text
     const text = (result.content as any)[0].text
@@ -457,8 +455,8 @@ describe('search_data', () => {
       arguments: { datasetId: 'ds1', next: nextUrl }
     })
     const sc = result.structuredContent as any
-    assert.equal(sc.lines[0].nom, 'Globex')
-    assert.equal(sc.count, 25)
+    assert.equal(sc.results[0].nom, 'Globex')
+    assert.equal(sc.total, 25)
   })
 
   it('should pass sort parameter', async () => {
@@ -472,7 +470,7 @@ describe('search_data', () => {
       arguments: { datasetId: 'ds1', sort: 'population,-name' }
     })
     const sc = result.structuredContent as any
-    assert.equal(sc.count, 2)
+    assert.equal(sc.total, 2)
     assert.ok(sc.filteredViewUrl.includes('sort=population'))
   })
 
@@ -535,7 +533,7 @@ describe('search_data', () => {
       arguments: { datasetId: 'ds1', query: 'test', select: 'nom,ville' }
     })
     const sc = result.structuredContent as any
-    assert.equal(sc.lines.length, 1)
+    assert.equal(sc.results.length, 1)
   })
 
   it('should pass bbox parameter', async () => {
@@ -549,7 +547,7 @@ describe('search_data', () => {
       arguments: { datasetId: 'ds1', bbox: '-2.5,43,3,47' }
     })
     const sc = result.structuredContent as any
-    assert.equal(sc.count, 3)
+    assert.equal(sc.total, 3)
     assert.ok(sc.filteredViewUrl.includes('bbox=-2.5'))
   })
 
@@ -564,7 +562,7 @@ describe('search_data', () => {
       arguments: { datasetId: 'ds1', geoDistance: '2.35,48.85,10km' }
     })
     const sc = result.structuredContent as any
-    assert.equal(sc.count, 5)
+    assert.equal(sc.total, 5)
     assert.ok(sc.filteredViewUrl.includes('geo_distance='))
   })
 
@@ -579,7 +577,7 @@ describe('search_data', () => {
       arguments: { datasetId: 'ds1', dateMatch: '2023-11-21' }
     })
     const sc = result.structuredContent as any
-    assert.equal(sc.count, 2)
+    assert.equal(sc.total, 2)
     assert.ok(sc.filteredViewUrl.includes('date_match='))
   })
 
@@ -619,18 +617,18 @@ describe('aggregate_data', () => {
     const sc = result.structuredContent as any
 
     assert.equal(sc.total, 100)
-    assert.equal(sc.totalAggregated, 3)
-    assert.equal(sc.nonRepresented, 10)
-    assert.equal(sc.aggregations.length, 3)
-    assert.equal(sc.aggregations[0].columnValue, 'Paris')
-    assert.equal(sc.aggregations[0].total, 50)
+    assert.equal(sc.total_values, 3)
+    assert.equal(sc.total_other, 10)
+    assert.equal(sc.aggs.length, 3)
+    assert.equal(sc.aggs[0].value, 'Paris')
+    assert.equal(sc.aggs[0].total, 50)
 
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('Total: 100 rows'))
-    assert.ok(text.includes('Groups shown: 3'))
-    assert.ok(text.includes('Rows not shown: 10'))
-    assert.ok(text.includes('- Paris: 50 rows'))
-    assert.ok(text.includes('- Lyon: 30 rows'))
+    assert.ok(text.includes('**100** total rows'))
+    assert.ok(text.includes('**3** groups shown'))
+    assert.ok(text.includes('**10** rows not represented'))
+    assert.ok(text.includes('- **Paris**: 50 rows'))
+    assert.ok(text.includes('- **Lyon**: 30 rows'))
     assert.ok(!text.startsWith('{'))
   })
 
@@ -658,10 +656,10 @@ describe('aggregate_data', () => {
       }
     })
     const sc = result.structuredContent as any
-    assert.equal(sc.aggregations[0].metricValue, 45000)
+    assert.equal(sc.aggs[0].metric, 45000)
 
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('- Paris: 50 rows, avg salaire = 45000'))
+    assert.ok(text.includes('- **Paris**: 50 rows, avg(salaire) = 45000'))
   })
 
   it('should support nested aggregations', async () => {
@@ -690,13 +688,13 @@ describe('aggregate_data', () => {
       arguments: { datasetId: 'ds1', groupByColumns: ['ville', 'contrat'] }
     })
     const sc = result.structuredContent as any
-    assert.equal(sc.aggregations[0].aggregations.length, 2)
-    assert.equal(sc.aggregations[0].aggregations[0].columnValue, 'CDI')
+    assert.equal(sc.aggs[0].aggs.length, 2)
+    assert.equal(sc.aggs[0].aggs[0].value, 'CDI')
 
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('- Paris: 50 rows'))
-    assert.ok(text.includes('  - CDI: 30 rows'))
-    assert.ok(text.includes('  - CDD: 20 rows'))
+    assert.ok(text.includes('- **Paris**: 50 rows'))
+    assert.ok(text.includes('  - **CDI**: 30 rows'))
+    assert.ok(text.includes('  - **CDD**: 20 rows'))
   })
 
   it('should pass sort parameter', async () => {
@@ -772,7 +770,7 @@ describe('get_field_values', () => {
     assert.deepEqual(sc.values, ['Paris', 'Lyon', 'Marseille'])
 
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('Distinct values of "ville" in dataset ds1:'))
+    assert.ok(text.includes('Distinct values of `ville`'))
     assert.ok(text.includes('Paris'))
     assert.ok(text.includes('Lyon'))
     assert.ok(text.includes('Marseille'))
@@ -812,15 +810,13 @@ describe('calculate_metric', () => {
 
     assert.equal(sc.datasetId, 'ds1')
     assert.equal(sc.fieldKey, 'salaire')
-    assert.equal(sc.metric, 'avg')
     assert.equal(sc.total, 1000)
-    assert.equal(sc.value, 42500)
+    assert.equal(sc.metric, 42500)
 
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('Metric: avg of "salaire"'))
-    assert.ok(text.includes('Dataset: ds1'))
+    assert.ok(text.includes('**avg** of `salaire`'))
     assert.ok(text.includes('Total rows: 1000'))
-    assert.ok(text.includes('Result: 42500'))
+    assert.ok(text.includes('Result: **42500**'))
     assert.ok(!text.startsWith('{'))
   })
 
@@ -835,9 +831,9 @@ describe('calculate_metric', () => {
       arguments: { datasetId: 'ds1', fieldKey: 'salaire', metric: 'stats' }
     })
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('count=1000'))
-    assert.ok(text.includes('min=18000'))
-    assert.ok(text.includes('avg=48500'))
+    assert.ok(text.includes('count: 1000'))
+    assert.ok(text.includes('min: 18000'))
+    assert.ok(text.includes('avg: 48500'))
   })
 
   it('should pass bbox and geoDistance parameters', async () => {
@@ -852,7 +848,7 @@ describe('calculate_metric', () => {
       arguments: { datasetId: 'ds1', fieldKey: 'salaire', metric: 'avg', bbox: '-1,43,3,47', geoDistance: '2.35,48.85,20km' }
     })
     const sc = result.structuredContent as any
-    assert.equal(sc.value, 35000)
+    assert.equal(sc.metric, 35000)
   })
 
   it('should pass dateMatch parameter', async () => {
@@ -866,7 +862,7 @@ describe('calculate_metric', () => {
       arguments: { datasetId: 'ds1', fieldKey: 'salaire', metric: 'avg', dateMatch: '2023-06-15' }
     })
     const sc = result.structuredContent as any
-    assert.equal(sc.value, 42000)
+    assert.equal(sc.metric, 42000)
   })
 
   it('should pass filters and percents', async () => {
@@ -887,11 +883,11 @@ describe('calculate_metric', () => {
       }
     })
     const sc = result.structuredContent as any
-    assert.equal(sc.value['50'], 42000)
+    assert.equal(sc.metric['50'], 42000)
 
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('25%=30000'))
-    assert.ok(text.includes('50%=42000'))
+    assert.ok(text.includes('p25: 30000'))
+    assert.ok(text.includes('p50: 42000'))
   })
 })
 
@@ -972,10 +968,9 @@ describe('geocode_address', () => {
     assert.equal(sc.results[1].type, 'street')
 
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('2 result(s)'))
+    assert.ok(text.includes('**2** result(s)'))
     assert.ok(text.includes('20 Avenue de Ségur 75007 Paris'))
-    assert.ok(text.includes('Longitude: 2.308628'))
-    assert.ok(text.includes('Latitude: 48.850699'))
+    assert.ok(text.includes('Coordinates: 48.850699, 2.308628'))
     assert.ok(text.includes('Île-de-France'))
     assert.ok(!text.startsWith('{'))
   })
@@ -997,7 +992,7 @@ describe('geocode_address', () => {
     assert.equal(sc.results.length, 0)
 
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('0 result(s)'))
+    assert.ok(text.includes('No results found'))
   })
 
   it('should pass custom limit parameter', async () => {

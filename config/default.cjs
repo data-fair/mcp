@@ -1,4 +1,5 @@
 module.exports = {
+  locale: 'en',
   portalUrl: undefined,
   dataFairAPIKey: undefined,
   ignoreRateLimiting: undefined,

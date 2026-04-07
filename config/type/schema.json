@@ -13,12 +13,19 @@
   "type": "object",
   "title": "Api config",
   "required": [
+    "locale",
     "defaultLimits",
     "observer",
     "port",
     "transport"
   ],
   "properties": {
+    "locale": {
+      "type": "string",
+      "enum": ["en", "fr"],
+      "default": "en",
+      "description": "Locale for tool titles. Defaults to English."
+    },
     "portalUrl": {
       "type": "string",
       "description": "Base URL of the Data Fair portal. Required in standalone mode (stdio transport).",

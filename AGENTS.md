@@ -24,7 +24,7 @@ MCP (Model Context Protocol) server for the Data Fair ecosystem. Exposes Data Fa
 - `src/mcp-router-factory.ts` — MCP-to-Express bridge
 - `src/mcp-servers/datasets/` — dataset MCP server:
   - `index.ts` — server creation
-  - `tools.ts` — `search_datasets`, `describe_dataset`, `search_data`, `aggregate_data`
+  - `tools.ts` — `list_datasets`, `describe_dataset`, `search_data`, `aggregate_data`
   - `prompts.ts` — sample prompts (French)
   - `resources.ts` — MCP resources for dataset listing/info
 

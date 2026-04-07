@@ -2,61 +2,57 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
-import { getOrigin, buildAxiosOptions, encodeDatasetId, handleApiError, formatTextOutput } from './_utils.ts'
-import { stringify as csvStringify } from 'csv-stringify/sync'
+import { getOrigin, buildAxiosOptions, datasetIdSchema, handleApiError, applyQueryToUrl, getToolTitle, getDatasetSchema as schemaTool, describeDataset as describeTool } from './_utils.ts'
 
 const debug = Debug('datasets-tools')
+const o = describeTool.schema.outputSchema.properties
 
 export default (server: McpServer) => {
   server.registerTool(
-    'describe_dataset',
+    describeTool.schema.name,
     {
-      title: 'Describe Dataset',
-      description: 'Get detailed metadata for a dataset: column schema, sample rows, license, spatial/temporal coverage.',
+      title: getToolTitle(describeTool.annotations),
+      description: describeTool.schema.description,
       inputSchema: {
-        datasetId: z.string().describe('The exact dataset ID from the "id" field in search_datasets results. Do not use the title or slug.')
+        datasetId: datasetIdSchema
       },
       outputSchema: {
-        id: z.string().describe('Unique dataset Id (required for search_data tools)'),
-        slug: z.string().optional().describe('Human-readable unique identifier for the dataset, used in URLs'),
-        title: z.string().describe('Dataset title'),
-        summary: z.string().optional().describe('A brief summary of the dataset content'),
-        description: z.string().optional().describe('A markdown description of the dataset content'),
-        link: z.string().describe('Link to the dataset page (must be included in responses as citation source)'),
-        count: z.number().describe('Total number of data rows in the dataset'),
-        keywords: z.array(z.string()).optional().describe('Keywords associated with the dataset'),
-        origin: z.string().optional().describe('Source or provider of the dataset'),
+        id: z.string().describe(o.id.description),
+        slug: z.string().optional().describe(o.slug.description),
+        title: z.string().describe(o.title.description),
+        summary: z.string().optional().describe(o.summary.description),
+        description: z.string().optional().describe(o.description.description),
+        page: z.string().describe(o.page.description),
+        count: z.number().describe(o.count.description),
+        keywords: z.array(z.string()).optional().describe(o.keywords.description),
+        origin: z.string().optional().describe(o.origin.description),
         license: z.object({
-          href: z.string().describe('URL to the license text'),
-          title: z.string().describe('License name/title')
-        }).optional().describe('Dataset license information (must be included in responses)'),
-        topics: z.array(z.string()).optional().describe('Topics/categories the dataset belongs to'),
-        spatial: z.any().optional().describe('Spatial coverage information'),
-        temporal: z.any().optional().describe('Temporal coverage information'),
-        frequency: z.string().optional().describe('Update frequency of the dataset'),
-        schema: z.array(
-          z.object({
-            key: z.string().describe('Column identifier'),
-            type: z.string().describe('Data type of the column'),
-            title: z.string().optional().describe('Human-readable column title'),
-            description: z.string().optional().describe('Column description'),
-            enum: z.array(z.any()).optional().describe('List of all possible values for this column'),
-            enumTruncated: z.boolean().optional().describe('Whether the enum list was truncated because it exceeded 20 values'),
-            enumTotal: z.number().optional().describe('Total number of enum values before truncation'),
-            labels: z.record(z.string()).optional().describe('Object mapping actual data values (keys) to human-readable labels (values). Use keys for filters.'),
-            concept: z.string().optional().describe('Semantic concept associated with the column')
-          })
-        ).describe('Dataset column schema with types and metadata'),
-        geolocalized: z.boolean().optional().describe('Whether this dataset has geographic data. When true, geo filters (bbox, geoDistance) are available in search_data, aggregate_data, and calculate_metric.'),
-        bbox: z.array(z.number()).optional().describe('Spatial bounding box of the dataset: [lonMin, latMin, lonMax, latMax]. Present only for geolocalized datasets.'),
-        temporalDataset: z.boolean().optional().describe('Whether this dataset has temporal data (date fields). When true, the dateMatch filter is available in search_data, aggregate_data, and calculate_metric.'),
+          href: z.string().describe(o.license.properties.href.description),
+          title: z.string().describe(o.license.properties.title.description)
+        }).optional().describe(o.license.description),
+        topics: z.array(z.string()).optional().describe(o.topics.description),
+        spatial: z.any().optional().describe(o.spatial.description),
+        temporal: z.any().optional().describe(o.temporal.description),
+        frequency: z.string().optional().describe(o.frequency.description),
+        geolocalized: z.boolean().optional().describe(o.geolocalized.description),
+        bbox: z.array(z.number()).optional().describe(o.bbox.description),
+        temporalDataset: z.boolean().optional().describe(o.temporalDataset.description),
         timePeriod: z.object({
-          startDate: z.string().describe('Start of the temporal coverage (ISO datetime)'),
-          endDate: z.string().describe('End of the temporal coverage (ISO datetime)')
-        }).optional().describe('Temporal coverage of the dataset data. Present only for temporal datasets.'),
-        sampleLines: z.array(z.record(z.any())).describe(
-          'Array of 3 sample data rows showing real values from the dataset. Use these examples to understand exact formatting, casing, and typical values for _eq and _search filters.'
-        )
+          startDate: z.string().describe(o.timePeriod.properties.startDate.description),
+          endDate: z.string().describe(o.timePeriod.properties.endDate.description)
+        }).optional().describe(o.timePeriod.description),
+        schema: z.array(z.object({
+          key: z.string().describe(o.schema.items.properties.key.description),
+          type: z.string().describe(o.schema.items.properties.type.description),
+          title: z.string().optional().describe(o.schema.items.properties.title.description),
+          description: z.string().optional().describe(o.schema.items.properties.description.description),
+          enum: z.array(z.any()).optional().describe(o.schema.items.properties.enum.description),
+          enumTruncated: z.boolean().optional().describe(o.schema.items.properties.enumTruncated.description),
+          enumTotal: z.number().optional().describe(o.schema.items.properties.enumTotal.description),
+          labels: z.record(z.string()).optional().describe(o.schema.items.properties.labels.description),
+          concept: z.string().optional().describe(o.schema.items.properties.concept.description)
+        })).describe(o.schema.description),
+        sampleLines: z.array(z.record(z.any())).describe(o.sampleLines.description)
       },
       annotations: {
         readOnlyHint: true
@@ -70,155 +66,31 @@ export default (server: McpServer) => {
       let fetchedData: any
       try {
         fetchedData = (await axios.get(
-          new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}`, baseUrl).toString(),
+          new URL(`/data-fair/api/v1/datasets/${encodeURIComponent(params.datasetId)}`, baseUrl).toString(),
           buildAxiosOptions(extra.requestInfo?.headers)
         )).data
       } catch (err: any) {
         handleApiError(err)
       }
 
-      const dataset: any = {
-        id: fetchedData.id,
-        title: fetchedData.title,
-        link: fetchedData.page,
-        count: fetchedData.count
-      }
+      const { samplesReq } = schemaTool.buildQuery(params)
+      const sampleUrl = new URL(`/data-fair/api/v1/${samplesReq.path}`, baseUrl)
+      applyQueryToUrl(sampleUrl, samplesReq.query)
 
-      if (fetchedData.slug) dataset.slug = fetchedData.slug
-      if (fetchedData.summary) dataset.summary = fetchedData.summary
-      if (fetchedData.description) {
-        dataset.description = fetchedData.description.length > 2000
-          ? fetchedData.description.slice(0, 2000) + '… (truncated, see dataset page for full description)'
-          : fetchedData.description
-      }
-      if (fetchedData.keywords) dataset.keywords = fetchedData.keywords
-      if (fetchedData.origin) dataset.origin = fetchedData.origin
-      if (fetchedData.license) dataset.license = fetchedData.license
-      if (fetchedData.topics) dataset.topics = fetchedData.topics.map((topic: any) => topic.title)
-      if (fetchedData.spatial) dataset.spatial = fetchedData.spatial
-      if (fetchedData.temporal) dataset.temporal = fetchedData.temporal
-      if (fetchedData.frequency) dataset.frequency = fetchedData.frequency
-
-      if (Array.isArray(fetchedData.bbox) && fetchedData.bbox.length > 0) {
-        dataset.geolocalized = true
-        dataset.bbox = fetchedData.bbox
-      }
-
-      if (fetchedData.timePeriod) {
-        dataset.temporalDataset = true
-        dataset.timePeriod = fetchedData.timePeriod
-      }
-
-      if (fetchedData.schema) {
-        dataset.schema = fetchedData.schema
-          .filter((col: any) => !['_i', '_id', '_rand'].includes(col.key))
-          .map((col: any) => {
-            const colResult: any = {
-              key: col.key,
-              type: col.type
-            }
-
-            if (col.title) colResult.title = col.title
-            if (col.description) colResult.description = col.description
-            if (col['x-concept']?.title || col['x-concept']?.id) {
-              colResult.concept = col['x-concept']?.title || col['x-concept']?.id
-            }
-            if (col.enum) {
-              if (col.enum.length <= 20) {
-                colResult.enum = col.enum
-              } else {
-                colResult.enum = col.enum.slice(0, 20)
-                colResult.enumTruncated = true
-                colResult.enumTotal = col.enum.length
-              }
-            }
-            if (col['x-labels']) colResult.labels = col['x-labels']
-
-            return colResult
-          })
-      }
-
-      const sampleUrl = new URL(`/data-fair/api/v1/datasets/${encodeDatasetId(params.datasetId)}/lines`, baseUrl)
-      sampleUrl.searchParams.set('size', '3')
-
-      let sampleLines: any[] | undefined
+      let sampleLines: any[] = []
       try {
         sampleLines = (await axios.get(
           sampleUrl.toString(),
           buildAxiosOptions(extra.requestInfo?.headers)
         )).data.results
       } catch (err: any) {
-        handleApiError(err) // always throws
-      }
-      dataset.sampleLines = (sampleLines ?? []).map((line: any) => {
-        const { _id, _i, _rand, ...clean } = line
-        return clean
-      })
-
-      // Build text output
-      const metadataLines = [`Dataset: ${dataset.title}`, `ID: ${dataset.id}`]
-      if (dataset.slug) metadataLines.push(`Slug: ${dataset.slug}`)
-      metadataLines.push(`Link: ${dataset.link}`)
-      if (dataset.summary) metadataLines.push(`Summary: ${dataset.summary}`)
-      metadataLines.push(`Rows: ${dataset.count}`)
-      if (dataset.license) metadataLines.push(`License: ${dataset.license.title} (${dataset.license.href})`)
-      if (dataset.origin) metadataLines.push(`Origin: ${dataset.origin}`)
-      if (dataset.keywords) metadataLines.push(`Keywords: ${dataset.keywords.join(', ')}`)
-      if (dataset.topics) metadataLines.push(`Topics: ${dataset.topics.join(', ')}`)
-      if (dataset.frequency) metadataLines.push(`Frequency: ${dataset.frequency}`)
-      if (dataset.spatial) metadataLines.push(`Spatial: ${typeof dataset.spatial === 'string' ? dataset.spatial : JSON.stringify(dataset.spatial)}`)
-      if (dataset.temporal) metadataLines.push(`Temporal: ${typeof dataset.temporal === 'string' ? dataset.temporal : JSON.stringify(dataset.temporal)}`)
-      if (dataset.geolocalized) metadataLines.push(`Geolocalized: yes (bbox: [${dataset.bbox.join(', ')}]). Geo filters (bbox, geoDistance) are available in search_data, aggregate_data, and calculate_metric.`)
-      if (dataset.temporalDataset) metadataLines.push(`Temporal dataset: yes (${dataset.timePeriod.startDate} to ${dataset.timePeriod.endDate}). The dateMatch filter is available in search_data, aggregate_data, and calculate_metric.`)
-
-      let descriptionSection = ''
-      if (dataset.description) {
-        descriptionSection = `Description:\n${dataset.description}`
+        handleApiError(err)
       }
 
-      let schemaSection = ''
-      if (dataset.schema && dataset.schema.length > 0) {
-        const schemaLines = dataset.schema.map((col: any) => {
-          let line = `- ${col.key} (${col.type})`
-          if (col.title) line += `: ${col.title}`
-          if (col.description) line += ` — ${col.description}`
-          if (col.concept) line += ` [concept: ${col.concept}]`
-          if (col.enum) {
-            const shown = col.enum.join(', ')
-            if (col.enumTruncated) {
-              line += ` [enum: ${shown}, ... (${col.enumTotal} total)]`
-            } else {
-              line += ` [enum: ${shown}]`
-            }
-          }
-          if (col.labels) {
-            const entries = Object.entries(col.labels)
-            const shown = entries.slice(0, 10).map(([k, v]) => `${k}=${v}`).join(', ')
-            if (entries.length > 10) {
-              line += ` [labels: ${shown}, ... (${entries.length} total)]`
-            } else {
-              line += ` [labels: ${shown}]`
-            }
-          }
-          return line
-        })
-        schemaSection = `Schema (${dataset.schema.length} columns):\n${schemaLines.join('\n')}`
-      }
-
-      let sampleSection = ''
-      if (dataset.sampleLines && dataset.sampleLines.length > 0) {
-        sampleSection = `Sample data:\n${csvStringify(dataset.sampleLines, { header: true }).trimEnd()}`
-      }
-
-      const text = formatTextOutput([
-        metadataLines.join('\n'),
-        descriptionSection,
-        schemaSection,
-        sampleSection
-      ])
+      const { text, structuredContent } = describeTool.formatResult(fetchedData, { sampleLines })
 
       return {
-        structuredContent: dataset,
+        structuredContent,
         content: [{ type: 'text', text }]
       }
     }
