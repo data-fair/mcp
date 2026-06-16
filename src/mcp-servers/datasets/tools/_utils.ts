@@ -11,7 +11,7 @@ export const getToolTitle = (annotations: Annotations): string => {
 }
 
 // Re-export shared utilities
-export { cleanRow, normalizeSort } from '@data-fair/agent-tools-data-fair/_utils'
+export { cleanRow, normalizeSort, buildFilterQueryString } from '@data-fair/agent-tools-data-fair/_utils'
 
 // Re-export per-tool modules
 export * as searchData from '@data-fair/agent-tools-data-fair/search-data'

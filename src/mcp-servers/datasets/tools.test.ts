@@ -350,8 +350,8 @@ describe('search_data', () => {
     assert.equal(sc.results[0]._i, undefined)
     assert.equal(sc.results[0]._rand, undefined)
     assert.equal(sc.results[0]._score, 1.5)
-    assert.ok(sc.filteredViewUrl.includes('/datasets/ds1/full'))
-    assert.ok(sc.filteredViewUrl.includes('q=ACME'))
+    assert.ok(sc.filteredViewUrl.includes('/dataset/ds1/table'))
+    assert.ok(sc.filteredViewUrl.includes('_c_q=ACME'))
 
     // Verify text format
     const text = (result.content as any)[0].text
@@ -548,7 +548,7 @@ describe('search_data', () => {
     })
     const sc = result.structuredContent as any
     assert.equal(sc.total, 3)
-    assert.ok(sc.filteredViewUrl.includes('bbox=-2.5'))
+    assert.ok(sc.filteredViewUrl.includes('_c_bbox=-2.5'))
   })
 
   it('should pass geoDistance parameter', async () => {
@@ -563,7 +563,7 @@ describe('search_data', () => {
     })
     const sc = result.structuredContent as any
     assert.equal(sc.total, 5)
-    assert.ok(sc.filteredViewUrl.includes('geo_distance='))
+    assert.ok(sc.filteredViewUrl.includes('_c_geo_distance='))
   })
 
   it('should pass dateMatch parameter', async () => {
@@ -578,7 +578,7 @@ describe('search_data', () => {
     })
     const sc = result.structuredContent as any
     assert.equal(sc.total, 2)
-    assert.ok(sc.filteredViewUrl.includes('date_match='))
+    assert.ok(sc.filteredViewUrl.includes('_c_date_match='))
   })
 
   it('should trim spaces in select parameter', async () => {

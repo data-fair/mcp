@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import Debug from 'debug'
 import axios from '@data-fair/lib-node/axios.js'
-import { getOrigin, buildAxiosOptions, datasetIdSchema, filtersSchema, bboxSchema, geoDistanceSchema, dateMatchSchema, handleApiError, applyQueryToUrl, getToolTitle, normalizeSort, searchData as searchDataTool } from './_utils.ts'
+import { getOrigin, buildAxiosOptions, datasetIdSchema, filtersSchema, bboxSchema, geoDistanceSchema, dateMatchSchema, handleApiError, applyQueryToUrl, getToolTitle, buildFilterQueryString, searchData as searchDataTool } from './_utils.ts'
 
 const debug = Debug('datasets-tools')
 const p = searchDataTool.schema.inputSchema.properties
@@ -89,25 +89,20 @@ export default (server: McpServer) => {
         dateMatch: params.dateMatch
       })
 
-      // Add MCP-specific filtered view URL
-      const filteredViewUrl = new URL(`/datasets/${encodeURIComponent(params.datasetId)}/full`, baseUrl)
-      if (params.query) {
-        filteredViewUrl.searchParams.set('q', params.query)
-        filteredViewUrl.searchParams.set('q_mode', 'complete')
-      }
-      if (params.filters) {
-        for (const [key, value] of Object.entries(params.filters)) {
-          filteredViewUrl.searchParams.set(key, String(value))
-        }
-      }
-      if (params.bbox) filteredViewUrl.searchParams.set('bbox', params.bbox)
-      if (params.geoDistance) filteredViewUrl.searchParams.set('geo_distance', params.geoDistance)
-      if (params.dateMatch) filteredViewUrl.searchParams.set('date_match', params.dateMatch)
-      if (params.select) filteredViewUrl.searchParams.set('cols', params.select)
-      if (params.sort) {
-        const normalizedSort = normalizeSort(params.sort)
-        if (normalizedSort) filteredViewUrl.searchParams.set('sort', normalizedSort)
-      }
+      // Add MCP-specific filtered view URL. Reuse the shared filter encoder so
+      // the link uses the same _c_-prefixed convention as the "Filter query:"
+      // text line and survives the table view's URL sync (useConceptFilters).
+      const filteredViewUrl = new URL(`/dataset/${encodeURIComponent(params.datasetId)}/table`, baseUrl)
+      const filterQueryString = buildFilterQueryString({
+        q: params.query,
+        filters: params.filters,
+        select: params.select,
+        sort: params.sort,
+        bbox: params.bbox,
+        geoDistance: params.geoDistance,
+        dateMatch: params.dateMatch
+      })
+      if (filterQueryString) filteredViewUrl.search = filterQueryString
       structuredContent.filteredViewUrl = filteredViewUrl.toString()
 
       return {
