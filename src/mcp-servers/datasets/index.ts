@@ -21,7 +21,7 @@ const server = new McpServer({
 1. **list_datasets** — find relevant datasets using French keywords (simple terms, not sentences). If 0 results, try synonyms or broader French terms. If many results, read titles and summaries to pick the most relevant.
 2. **describe_dataset** — get the schema, sample rows, and metadata for a dataset. Always do this before querying data.
 3. Choose the right tool based on the question:
-   - "Show me rows / find specific records / who / which" → **search_data**
+   - "Show me rows / find specific records / who / which" → **search_data** (retrieves rows; do NOT use it to compute statistics)
    - "How many X per Y / breakdown by category / distribution" → **aggregate_data**
    - "What is the total / average / min / max of X?" → **calculate_metric**
    - "What values exist in column X?" → **get_field_values**
@@ -60,7 +60,12 @@ In search_data, you can sort by distance with: \`sort: "_geo_distance:lon:lat"\`
 Always include in your responses:
 - The **dataset page link** (from list_datasets or describe_dataset)
 - The **filtered view URL** (from search_data) when applicable
-- The **license** information (from describe_dataset) when available`,
+- The **license** information (from describe_dataset) when available
+
+## Presenting results
+- Respond in the same language as the user's question.
+- Round numeric results to 2 decimal places when appropriate.
+- Summarize key findings from tabular data rather than dumping raw rows.`,
   capabilities: {
     resources: {},
     tools: {},
