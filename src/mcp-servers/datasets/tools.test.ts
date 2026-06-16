@@ -970,7 +970,7 @@ describe('geocode_address', () => {
     const text = (result.content as any)[0].text
     assert.ok(text.includes('**2** result(s)'))
     assert.ok(text.includes('20 Avenue de Ségur 75007 Paris'))
-    assert.ok(text.includes('Coordinates: 48.850699, 2.308628'))
+    assert.ok(text.includes('Coordinates: lon=2.308628, lat=48.850699'))
     assert.ok(text.includes('Île-de-France'))
     assert.ok(!text.startsWith('{'))
   })
