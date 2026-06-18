@@ -14,7 +14,8 @@ import registerTools from './tools.ts'
 const server = new McpServer({
   name: 'datafair-datasets-mcp-server',
   title: 'Data Fair Datasets MCP Server',
-  version: packageJson.version,
+  version: packageJson.version
+}, {
   instructions: `You are querying French open data through Data Fair. Follow this workflow and these rules.
 
 ## Workflow
