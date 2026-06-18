@@ -418,7 +418,7 @@ describe('search_data', () => {
     assert.equal(sc.next, 'http://localhost/data-fair/api/v1/datasets/ds1/lines?size=10&after=abc123')
 
     const text = (result.content as any)[0].text
-    assert.ok(text.includes('Next page available.'))
+    assert.ok(text.includes('Next page available'))
   })
 
   it('should not include next when API does not provide one', async () => {
@@ -435,7 +435,7 @@ describe('search_data', () => {
     assert.equal(sc.next, undefined)
 
     const text = (result.content as any)[0].text
-    assert.ok(!text.includes('Next page available.'))
+    assert.ok(!text.includes('Next page available'))
   })
 
   it('should fetch directly from next URL when provided', async () => {
