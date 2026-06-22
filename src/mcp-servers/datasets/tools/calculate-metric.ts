@@ -29,7 +29,9 @@ export default (server: McpServer) => {
         datasetId: z.string().describe(o.datasetId.description),
         fieldKey: z.string().describe(o.fieldKey.description),
         total: z.number().describe(o.total.description),
-        value: z.any().describe(o.metric.description)
+        // Key MUST be `metric` to match the structuredContent the shared module emits
+        // (it was `value` and silently broke calculate_metric in real MCP hosts).
+        metric: z.any().describe(o.metric.description)
       },
       annotations: {
         readOnlyHint: true

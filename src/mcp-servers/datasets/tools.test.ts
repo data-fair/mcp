@@ -53,6 +53,16 @@ before(async () => {
     server.connect(serverTransport),
     client.connect(clientTransport)
   ])
+
+  // IMPORTANT: do not remove. The SDK Client only validates a tool's
+  // structuredContent against its advertised outputSchema once it has cached
+  // that schema, which happens here via listTools(). This makes every callTool()
+  // below reject structuredContent that drifts from the outputSchema (extra or
+  // missing keys, under additionalProperties:false) — exactly like a real MCP
+  // host. Without this call the suite is blind to schema drift between
+  // @data-fair/agent-tools-data-fair and the local outputSchemas (e.g. the `slug`
+  // and `metric`/`value` drifts). See AGENTS.md → "Schema drift with @data-fair/agent-tools-data-fair".
+  await client.listTools()
 })
 
 after(async () => {

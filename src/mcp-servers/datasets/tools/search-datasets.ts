@@ -23,6 +23,7 @@ export default (server: McpServer) => {
         count: z.number().describe(o.count.description),
         results: z.array(z.object({
           id: z.string().describe(o.results.items.properties.id.description),
+          slug: z.string().optional().describe(o.results.items.properties.slug.description),
           title: z.string().describe(o.results.items.properties.title.description),
           page: z.string().describe(o.results.items.properties.page.description),
           summary: z.string().optional().describe(o.results.items.properties.summary.description)

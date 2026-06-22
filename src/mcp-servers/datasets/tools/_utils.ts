@@ -13,7 +13,16 @@ export const getToolTitle = (annotations: Annotations): string => {
 // Re-export shared utilities
 export { cleanRow, normalizeSort, buildFilterQueryString } from '@data-fair/agent-tools-data-fair/_utils'
 
-// Re-export per-tool modules
+// Re-export per-tool modules.
+//
+// ⚠️ SCHEMA DRIFT WARNING: each tool file hand-writes a Zod `inputSchema`/`outputSchema`
+// that MUST stay in sync with the JSON schema *and* the `structuredContent` actually
+// emitted by `formatResult` in these shared modules. Output schemas are advertised to
+// clients with `additionalProperties: false`, so a real MCP host REJECTS any emitted key
+// the local outputSchema doesn't declare and any required key it omits — even though the
+// in-memory test client only enforces this once `listTools()` has been called.
+// When bumping @data-fair/agent-tools-data-fair, re-check every tool's outputSchema keys
+// against the new `formatResult` output. See AGENTS.md → "Schema drift with @data-fair/agent-tools-data-fair".
 export * as searchData from '@data-fair/agent-tools-data-fair/search-data'
 export * as aggregateData from '@data-fair/agent-tools-data-fair/aggregate-data'
 export * as calculateMetric from '@data-fair/agent-tools-data-fair/calculate-metric'

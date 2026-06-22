@@ -34,6 +34,18 @@ MCP (Model Context Protocol) server for the Data Fair ecosystem. Exposes Data Fa
 - Origin is resolved from `portalUrl` config or `X-Forwarded-*` headers
 - All tools are read-only (`readOnlyHint: true`)
 - Datasets API is proxied through the portal URL at `/data-fair/api/v1`
+- Tool schemas come from `@data-fair/agent-tools-data-fair`, but each tool file
+  (`src/mcp-servers/datasets/tools/*.ts`) re-declares the `inputSchema`/`outputSchema` as Zod —
+  see drift warning below
+
+## Schema drift with @data-fair/agent-tools-data-fair
+
+Each tool's Zod `outputSchema` duplicates the shape of the `structuredContent` the shared
+module's `formatResult` emits, and is advertised with `additionalProperties: false` — so MCP
+hosts reject the whole result on any mismatch (extra or missing key). When the shared dep
+changes (caret range, so `npm update` can pull it silently), re-sync the local `outputSchema`s.
+`npm test` catches this: `tools.test.ts` calls `listTools()` so the client validates output like
+a real host — keep that call, and have fixtures emit the optional fields you want guarded.
 
 ## Commands
 
