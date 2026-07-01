@@ -67,7 +67,7 @@ export default (server: McpServer) => {
       try {
         fetchedData = (await axios.get(
           new URL(`/data-fair/api/v1/datasets/${encodeURIComponent(params.datasetId)}`, baseUrl).toString(),
-          buildAxiosOptions(extra.requestInfo?.headers)
+          buildAxiosOptions(baseUrl)
         )).data
       } catch (err: any) {
         handleApiError(err)
@@ -81,7 +81,7 @@ export default (server: McpServer) => {
       try {
         sampleLines = (await axios.get(
           sampleUrl.toString(),
-          buildAxiosOptions(extra.requestInfo?.headers)
+          buildAxiosOptions(baseUrl)
         )).data.results
       } catch (err: any) {
         handleApiError(err)

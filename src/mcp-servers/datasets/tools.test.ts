@@ -6,12 +6,14 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import nock from 'nock'
 import registerTools from './tools.ts'
+import { buildAxiosOptions } from './tools/_utils.ts'
+import config from '#config'
 
 /**
  * Fake Data Fair API server that returns canned responses based on the URL path.
  * Routes are matched longest-pattern-first to avoid ambiguity.
  */
-const routes: Record<string, (url: URL) => any> = {}
+const routes: Record<string, (url: URL, req: IncomingMessage) => any> = {}
 
 const fakeApi = createServer((req: IncomingMessage, res: ServerResponse) => {
   const url = new URL(req.url!, 'http://localhost')
@@ -19,7 +21,7 @@ const fakeApi = createServer((req: IncomingMessage, res: ServerResponse) => {
   const sortedPatterns = Object.keys(routes).sort((a, b) => b.length - a.length)
   for (const pattern of sortedPatterns) {
     if (url.pathname.includes(pattern)) {
-      const body = JSON.stringify(routes[pattern](url))
+      const body = JSON.stringify(routes[pattern](url, req))
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end(body)
       return
@@ -70,6 +72,28 @@ after(async () => {
   await server.close()
   fakeApi.closeAllConnections()
   await new Promise<void>(resolve => fakeApi.close(() => resolve()))
+})
+
+describe('Referer header on outgoing data-fair calls', () => {
+  // The Referer is only meant to tag traffic when the MCP is self-hosted as part
+  // of the data-fair stack (no portalUrl, origin resolved from X-Forwarded-* headers).
+  // In standalone mode (portalUrl set, remote data-fair) no Referer is sent.
+  it('sets a Referer ending in /mcp when self-hosted (stack mode, no portalUrl)', () => {
+    const saved = config.portalUrl
+    config.portalUrl = undefined
+    try {
+      const headers = buildAxiosOptions('https://data.example.com').headers as Record<string, string>
+      assert.equal(headers.Referer, 'https://data.example.com/mcp')
+    } finally {
+      config.portalUrl = saved
+    }
+  })
+
+  it('omits the Referer in standalone mode (portalUrl set)', () => {
+    // portalUrl is set by the `before` hook above (standalone mode)
+    const headers = buildAxiosOptions('https://data.example.com').headers as Record<string, string>
+    assert.equal(headers.Referer, undefined)
+  })
 })
 
 describe('list_datasets', () => {
