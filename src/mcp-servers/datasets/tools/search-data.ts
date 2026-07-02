@@ -71,7 +71,7 @@ export default (server: McpServer) => {
       try {
         response = (await axios.get(
           fetchUrlStr,
-          buildAxiosOptions(extra.requestInfo?.headers)
+          buildAxiosOptions(baseUrl)
         )).data
       } catch (err: any) {
         handleApiError(err)
