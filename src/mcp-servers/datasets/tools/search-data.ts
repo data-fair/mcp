@@ -92,7 +92,7 @@ export default (server: McpServer) => {
       // Add MCP-specific filtered view URL. Reuse the shared filter encoder so
       // the link uses the same _c_-prefixed convention as the "Filter query:"
       // text line and survives the table view's URL sync (useConceptFilters).
-      const filteredViewUrl = new URL(`/dataset/${encodeURIComponent(params.datasetId)}/table`, baseUrl)
+      const filteredViewUrl = new URL(`/datasets/${encodeURIComponent(params.datasetId)}/table`, baseUrl)
       const filterQueryString = buildFilterQueryString({
         q: params.query,
         filters: params.filters,

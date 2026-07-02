@@ -360,7 +360,7 @@ describe('search_data', () => {
     assert.equal(sc.results[0]._i, undefined)
     assert.equal(sc.results[0]._rand, undefined)
     assert.equal(sc.results[0]._score, 1.5)
-    assert.ok(sc.filteredViewUrl.includes('/dataset/ds1/table'))
+    assert.ok(sc.filteredViewUrl.includes('/datasets/ds1/table'))
     assert.ok(sc.filteredViewUrl.includes('_c_q=ACME'))
 
     // Verify text format
