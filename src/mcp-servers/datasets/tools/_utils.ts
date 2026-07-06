@@ -54,10 +54,11 @@ export const getOrigin = (headers: IsomorphicHeaders | undefined): string => {
   }
 }
 
-export const buildAxiosOptions = (headers: IsomorphicHeaders | undefined): AxiosRequestConfig => {
+export const buildAxiosOptions = (baseUrl: string): AxiosRequestConfig => {
   const axiosHeaders: Record<string, string> = {
-    'User-Agent': '@data-fair/mcp (Datasets)'
+    'User-Agent': '@data-fair/mcp (Datasets)',
   }
+  if (!config.portalUrl) axiosHeaders['Referer'] = baseUrl + '/mcp'
   if (config.dataFairAPIKey) {
     axiosHeaders['x-api-key'] = config.dataFairAPIKey
   }
