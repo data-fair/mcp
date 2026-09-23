@@ -56,6 +56,25 @@ describe('app', () => {
         assert.equal(res.status, 403)
       }
     })
+    it('does not let empty/blank profiles entries fall through the gate', async () => {
+      const saved = config.publicProfiles
+      config.publicProfiles = []
+      try {
+        for (const q of ['profiles=,,', 'profiles=%20,%20']) {
+          const res = await fetch(`${base}/mcp-server/mcp?${q}`, { method: 'POST', headers: { ...PROXY, 'content-type': 'application/json' }, body: '{}' })
+          assert.equal(res.status, 403)
+        }
+      } finally { config.publicProfiles = saved }
+    })
+    it('refuses a repeated profiles parameter with 403, not a 500', async () => {
+      const res = await fetch(`${base}/mcp-server/mcp?profiles=explore&profiles=edit`, { method: 'POST', headers: { ...PROXY, 'content-type': 'application/json' }, body: '{}' })
+      assert.equal(res.status, 403)
+    })
+    it('ignores profiles on the alias route: /datasets/mcp?profiles=edit still serves the seven names', async () => {
+      const client = await connect('/mcp-server/datasets/mcp?profiles=edit', PROXY)
+      assert.deepEqual((await client.listTools()).tools.map(t => t.name), ['list_datasets', 'describe_dataset', 'search_data', 'get_field_values', 'aggregate_data', 'calculate_metric', 'geocode_address'])
+      await client.close()
+    })
     it('lists only public profiles in the registry and keeps /status internal', async () => {
       const reg: any = await (await fetch(`${base}/mcp-server/v0/servers`, { headers: PROXY })).json()
       assert.deepEqual(reg.servers.map((s: any) => s.server.name), ['fr.data-fair/explore'])

@@ -7,12 +7,15 @@ import { createComposition, type Composition } from './composition.ts'
 import { createApp } from './app.ts'
 
 let server: Server
-let httpTerminator: HttpTerminator
-let composition: Composition
+let httpTerminator: HttpTerminator | undefined
+let composition: Composition | undefined
 
 export const start = async () => {
   const mainSiteUrl = config.mainSiteUrl ?? config.portalUrl
   if (!mainSiteUrl) throw new Error('MAIN_SITE_URL (or PORTAL_URL) is required in http mode')
+  // a PORTAL_URL-only deployment (config.mainSiteUrl unset) must still let app.ts/context.ts
+  // read `config.mainSiteUrl!` directly — write the resolved value back before createApp runs
+  config.mainSiteUrl ??= mainSiteUrl
 
   const dispatcher = createDispatcher({ mainSiteUrl })
   composition = await createComposition({ config, dispatcher, mainSiteUrl })
@@ -34,7 +37,7 @@ export const start = async () => {
 }
 
 export const stop = async () => {
-  await httpTerminator.terminate()
-  composition.close()
+  await httpTerminator?.terminate()
+  composition?.close()
   if (config.observer.active) await stopObserver()
 }

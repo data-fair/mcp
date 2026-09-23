@@ -1,7 +1,7 @@
 import express, { type Request, type Response, type NextFunction } from 'express'
 import { readFileSync } from 'node:fs'
 import { createSiteMiddleware, errorHandler, assertReqInternal } from '@data-fair/lib-express'
-import { createMcpHttpHandler, requestProfiles } from '@data-fair/openapi-mcp/adapters/mcp'
+import { createMcpHttpHandler } from '@data-fair/openapi-mcp/adapters/mcp'
 import { toNodeHandler } from '@modelcontextprotocol/node'
 import type { Dispatcher } from 'undici'
 import config from '#config'
@@ -14,6 +14,17 @@ const version: string = JSON.parse(readFileSync(new URL('../package.json', impor
 const cacheable = (res: Response) => res.set('Cache-Control', 'public, max-age=300')
 const headersOf = (req: Request) => new Headers(Object.entries(req.headers).flatMap(([k, v]) => v === undefined ? [] : [[k, Array.isArray(v) ? v.join(', ') : v] as [string, string]]))
 const siteOf = (req: Request) => originFromForwarded(headersOf(req)) ?? config.mainSiteUrl!
+/**
+ * The one profile parser, used by both the gate and the handler so they can never disagree:
+ * every occurrence of `profiles` (repeated params included), comma-split, trimmed, emptied
+ * entries dropped; an empty result (absent, blank, or only separators/blanks) means the
+ * default `explore` set — never "no profiles asked, so nothing to refuse".
+ */
+const profilesOf = (search: URLSearchParams): string[] => {
+  const raw = search.getAll('profiles').join(',')
+  const list = raw.split(',').map(s => s.trim()).filter(Boolean)
+  return list.length ? list : ['explore']
+}
 
 export function createApp (composition: Composition, dispatcher: Dispatcher) {
   const app = express()
@@ -40,7 +51,7 @@ export function createApp (composition: Composition, dispatcher: Dispatcher) {
   // The gate: in public mode a request may only ask for public profiles. No header opens more.
   const profileGate = (req: Request, res: Response, next: NextFunction) => {
     if (config.mode !== 'public') return next()
-    const asked = (req.query.profiles as string | undefined)?.split(',').map(s => s.trim()).filter(Boolean) ?? ['explore']
+    const asked = profilesOf(new URL(req.url, 'http://x').searchParams)
     const refused = asked.filter(p => !config.publicProfiles.includes(p))
     if (refused.length) { res.status(403).type('text/plain').send(`profile not available here: ${refused.join(', ')}`); return }
     next()
@@ -48,7 +59,7 @@ export function createApp (composition: Composition, dispatcher: Dispatcher) {
 
   const context = requestContext({ config, dispatcher })
   const options = { context, refreshMs: config.refreshInterval > 0 ? config.refreshInterval * 1000 : undefined }
-  const main = createMcpHttpHandler((request) => composition.main(requestProfiles(request) ?? ['explore']), { name: 'datafair-mcp-server', version }, options)
+  const main = createMcpHttpHandler((request) => composition.main(request ? profilesOf(new URL(request.url).searchParams) : ['explore']), { name: 'datafair-mcp-server', version }, options)
   const alias = createMcpHttpHandler(() => composition.alias(), { name: 'datafair-datasets-mcp-server', version }, options)
   composition.composer.onChange(() => { for (const h of [main, alias]) { h.notify.toolsChanged(); h.notify.resourcesChanged() } })
 
