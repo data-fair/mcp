@@ -17,7 +17,12 @@
     "defaultLimits",
     "observer",
     "port",
-    "transport"
+    "transport",
+    "mode",
+    "indexPath",
+    "refreshInterval",
+    "publicProfiles",
+    "extraTools"
   ],
   "properties": {
     "locale": {
@@ -77,6 +82,26 @@
     "transport": {
       "type": "string",
       "enum": ["stdio", "http"]
+    },
+    "mode": { "type": "string", "enum": ["public", "internal"], "default": "public", "description": "public: behind the ingress, profiles gated by publicProfiles, rate limited. internal: reachable only in the cluster, no gate, no rate limiting." },
+    "mainSiteUrl": { "type": "string", "description": "Origin of the main site (https://host). The index and every document are fetched from it; upstream calls swap it for the requesting site's origin. In stdio mode defaults to portalUrl.", "example": "https://koumoul.com" },
+    "indexPath": { "type": "string", "default": "/data-fair/api/v1/agents/index.json" },
+    "refreshInterval": { "type": "number", "default": 300, "description": "Seconds between conditional re-fetches of the index and documents; 0 disables." },
+    "publicProfiles": { "type": "array", "items": { "type": "string" }, "default": ["explore"], "description": "Profiles a request may ask for in public mode." },
+    "upstreamProxyHost": { "type": "string", "description": "Optional in-cluster reverse proxy (host or host:port) every site host resolves to; the request keeps the site's Host and gains X-Forwarded-Host/Proto." },
+    "extraTools": {
+      "type": "object",
+      "required": ["geocodeAddress"],
+      "properties": {
+        "geocodeAddress": {
+          "type": "object",
+          "required": ["active", "profiles"],
+          "properties": {
+            "active": { "type": "boolean", "default": true },
+            "profiles": { "type": "array", "items": { "type": "string" }, "default": ["explore"], "description": "The tool joins the set when the request's profiles intersect this list." }
+          }
+        }
+      }
     }
   }
 }

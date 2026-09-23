@@ -17,5 +17,17 @@ module.exports = {
     active: 'OBSERVER_ACTIVE'
   },
   port: 'PORT',
-  transport: 'TRANSPORT'
+  transport: 'TRANSPORT',
+  mode: 'MODE',
+  mainSiteUrl: 'MAIN_SITE_URL',
+  indexPath: 'INDEX_PATH',
+  refreshInterval: 'REFRESH_INTERVAL',
+  publicProfiles: { __name: 'PUBLIC_PROFILES', __format: 'json' },
+  upstreamProxyHost: 'UPSTREAM_PROXY_HOST',
+  extraTools: {
+    geocodeAddress: {
+      active: { __name: 'EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE', __format: 'json' },
+      profiles: { __name: 'EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES', __format: 'json' }
+    }
+  }
 }
