@@ -82,13 +82,13 @@ describe('app', () => {
       assert.equal((await fetch(`${base}/mcp-server/status`, { headers: PROXY })).status, 421)
     })
     it('rate-limits per IP', async () => {
-      const before = config.defaultLimits.apiRate.nb
-      config.defaultLimits.apiRate.nb = 1
+      const before = config.defaultLimits.apiRate!.nb
+      config.defaultLimits.apiRate!.nb = 1
       try {
         const h = { ...PROXY, 'x-forwarded-for': '198.51.100.9' }
         await fetch(`${base}/mcp-server/v0/servers`, { headers: h })
         assert.equal((await fetch(`${base}/mcp-server/v0/servers`, { headers: h })).status, 429)
-      } finally { config.defaultLimits.apiRate.nb = before }
+      } finally { config.defaultLimits.apiRate!.nb = before }
     })
   })
 
