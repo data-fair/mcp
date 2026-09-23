@@ -58,4 +58,13 @@ describe('siteFetch', () => {
     assert.equal(body.headers['x-forwarded-proto'], 'https')
     assert.equal(body.url, '/data-fair/api/v1/ping')
   })
+
+  it('never lets a mainSiteUrl port leak into a portless site host on the proxy hop', async () => {
+    const main = `http://127.0.0.1:${port}`
+    const dispatcher = createDispatcher({ mainSiteUrl: main, upstreamProxyHost: `127.0.0.1:${port}` })
+    const f = siteFetch('https://portal.test', { mainSiteUrl: main, dispatcher, upstreamProxyHost: `127.0.0.1:${port}` })
+    const body: any = await (await f(`${main}/data-fair/api/v1/ping`)).json()
+    assert.equal(body.headers['x-forwarded-host'], 'portal.test')
+    assert.equal(body.host, `portal.test:${port}`)
+  })
 })

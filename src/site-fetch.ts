@@ -56,7 +56,11 @@ export function siteFetch (siteOrigin: string, options: SiteFetchOptions & { dis
     const ours = url.origin === main.origin
     if (ours) {
       url.protocol = site.protocol
-      url.host = site.host
+      // hostname/port explicitly, not `url.host = site.host`: the WHATWG URL host setter
+      // leaves an existing port untouched when the new value carries none, so a portless
+      // site.host would otherwise let the original (mainSiteUrl's) port leak through.
+      url.hostname = site.hostname
+      url.port = site.port
     }
     const headers = new Headers(req.headers)
     headers.set('user-agent', '@data-fair/mcp')
