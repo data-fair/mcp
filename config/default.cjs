@@ -10,7 +10,8 @@ module.exports = {
     }
   },
   observer: {
-    active: true
+    active: true,
+    port: 9090
   },
   port: 8080,
   transport: 'stdio',
