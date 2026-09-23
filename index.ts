@@ -1,4 +1,3 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import config from '#config'
 
 if (config.transport === 'http') {
@@ -19,8 +18,23 @@ if (config.transport === 'http') {
     })
   })
 } else {
-  const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js')
-  const { default: datasetMCPServer } = await import('./src/mcp-servers/datasets/index.ts') as { default: McpServer }
-  const transport = new StdioServerTransport()
-  await datasetMCPServer.connect(transport)
+  // Standalone: one process, one site (PORTAL_URL), one caller; the API key is the identity.
+  const { serveStdio } = await import('@modelcontextprotocol/server/stdio')
+  const { mcpServerFactory } = await import('@data-fair/openapi-mcp/adapters/mcp')
+  const { createDispatcher } = await import('./src/site-fetch.ts')
+  const { createComposition } = await import('./src/composition.ts')
+  const mainSiteUrl = config.mainSiteUrl ?? config.portalUrl
+  if (!mainSiteUrl) { console.error('PORTAL_URL (or MAIN_SITE_URL) is required in stdio mode'); process.exit(1) }
+  const dispatcher = createDispatcher({ mainSiteUrl, timeoutMs: 30_000 })
+  const composition = await createComposition({ config, dispatcher, mainSiteUrl })
+  const profiles = (process.env.PROFILES ?? 'explore').split(',').map(s => s.trim()).filter(Boolean)
+  const { siteFetch } = await import('./src/site-fetch.ts')
+  const headers = config.dataFairAPIKey ? { 'x-apikey': config.dataFairAPIKey } : undefined
+  const context = () => ({ fetch: siteFetch(mainSiteUrl, { mainSiteUrl, dispatcher }), headers })
+  const version: string = (await import('./package.json', { with: { type: 'json' } })).default.version
+  let pinned: import('@modelcontextprotocol/server').Server | undefined
+  const factory = mcpServerFactory(() => composition.main(profiles), { name: 'datafair-mcp-server', version }, { context })
+  serveStdio(async (ctx) => { pinned = await factory(ctx) as import('@modelcontextprotocol/server').Server; return pinned })
+  composition.composer.onChange(() => pinned?.sendToolListChanged().catch(() => {}))
+  console.error(`datafair-mcp-server ready on stdio (${mainSiteUrl}, profiles ${profiles.join(',')})`)
 }

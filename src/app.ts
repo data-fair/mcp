@@ -1,21 +1,69 @@
-import express from 'express'
-import { errorHandler, createSiteMiddleware } from '@data-fair/lib-express'
-import datasetMCPServer from './mcp-servers/datasets/index.ts'
-import { createMCPRouter } from './mcp-router-factory.ts'
+import express, { type Request, type Response, type NextFunction } from 'express'
+import { readFileSync } from 'node:fs'
+import { createSiteMiddleware, errorHandler, assertReqInternal } from '@data-fair/lib-express'
+import { createMcpHttpHandler, requestProfiles } from '@data-fair/openapi-mcp/adapters/mcp'
+import { toNodeHandler } from '@modelcontextprotocol/node'
+import type { Dispatcher } from 'undici'
+import config from '#config'
 import { rateLimitingMiddleware } from './rate-limiting.ts'
+import { requestContext, originFromForwarded } from './context.ts'
+import { registryDocument } from './registry.ts'
+import type { Composition } from './composition.ts'
 
-const app = express()
-export default app
+const version: string = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
+const cacheable = (res: Response) => res.set('Cache-Control', 'public, max-age=300')
+const headersOf = (req: Request) => new Headers(Object.entries(req.headers).flatMap(([k, v]) => v === undefined ? [] : [[k, Array.isArray(v) ? v.join(', ') : v] as [string, string]]))
+const siteOf = (req: Request) => originFromForwarded(headersOf(req)) ?? config.mainSiteUrl!
 
-// no fancy embedded arrays, just string and arrays of strings in req.query
-app.set('query parser', 'simple')
-app.set('json spaces', 2)
+export function createApp (composition: Composition, dispatcher: Dispatcher) {
+  const app = express()
+  app.set('query parser', 'simple')
+  app.set('json spaces', 2)
 
-app.use(createSiteMiddleware('mcp-server'))
-app.use(rateLimitingMiddleware)
+  app.use(createSiteMiddleware('mcp-server'))
 
-// Initialize the datasets MCP server
-const datasetsRouter = createMCPRouter(datasetMCPServer)
-app.use('/datasets', datasetsRouter)
+  // R3: the limiter is applied per route, after the profile gate, in public mode only.
+  // A refused profile must answer 403 before reqIp can throw on a request lacking
+  // X-Forwarded-For; in internal mode reqIp would throw unconditionally (no reverse proxy).
+  const limiter = config.mode === 'public' ? [rateLimitingMiddleware] : []
 
-app.use(errorHandler)
+  // CORS for browser-based MCP clients, on the MCP routes only.
+  const cors = (req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Mcp-Protocol-Version, Mcp-Method, Mcp-Name')
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Type')
+    if (req.method === 'OPTIONS') { res.status(204).end(); return }
+    next()
+  }
+
+  // The gate: in public mode a request may only ask for public profiles. No header opens more.
+  const profileGate = (req: Request, res: Response, next: NextFunction) => {
+    if (config.mode !== 'public') return next()
+    const asked = (req.query.profiles as string | undefined)?.split(',').map(s => s.trim()).filter(Boolean) ?? ['explore']
+    const refused = asked.filter(p => !config.publicProfiles.includes(p))
+    if (refused.length) { res.status(403).type('text/plain').send(`profile not available here: ${refused.join(', ')}`); return }
+    next()
+  }
+
+  const context = requestContext({ config, dispatcher })
+  const options = { context, refreshMs: config.refreshInterval > 0 ? config.refreshInterval * 1000 : undefined }
+  const main = createMcpHttpHandler((request) => composition.main(requestProfiles(request) ?? ['explore']), { name: 'datafair-mcp-server', version }, options)
+  const alias = createMcpHttpHandler(() => composition.alias(), { name: 'datafair-datasets-mcp-server', version }, options)
+  composition.composer.onChange(() => { for (const h of [main, alias]) { h.notify.toolsChanged(); h.notify.resourcesChanged() } })
+
+  app.all('/mcp', cors, profileGate, ...limiter, toNodeHandler(main))
+  app.all('/datasets/mcp', cors, ...limiter, toNodeHandler(alias))
+
+  app.get('/v0/servers', ...limiter, (req, res) => {
+    cacheable(res)
+    res.json(registryDocument({ composer: composition.composer, siteOrigin: siteOf(req), version, locale: config.locale, profiles: config.mode === 'public' ? config.publicProfiles : undefined }))
+  })
+  app.get('/status', ...limiter, (req, res) => {
+    if (config.mode === 'public') assertReqInternal(req)
+    res.json({ mode: config.mode, mainSiteUrl: config.mainSiteUrl, services: composition.composer.services, profiles: composition.composer.profiles().map(p => p.name), lastRefresh: composition.lastRefresh(), extraTools: config.extraTools })
+  })
+
+  app.use(errorHandler)
+  return app
+}
