@@ -59,5 +59,5 @@ operations) is discovered through the main site's agent index and turned into MC
 - `npm run dev-stdio` — dev with stdio transport
 - `npm run dev-http` — dev with HTTP transport
 - `npm run dev-inspector` — MCP inspector UI
-- `npm run quality` — lint + type-check
+- `npm run quality` — lint + build-types + type-check + tests
 - `npm run lint-fix` — auto-fix lint issues

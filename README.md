@@ -65,6 +65,7 @@ Routes:
 |-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------|-------------------|
 | `PORTAL_URL`          | Base URL of the Data Fair portal. Required in standalone mode.                                                                                                           | —       | standalone         |
 | `DATA_FAIR_API_KEY`   | API key sent to Data Fair for authentication.                                                                                                                            | —       | standalone         |
+| `LOCALE`              | Locale for tool titles: `en` or `fr`.                                                                                                                                    | `en`    | standalone/stack   |
 | `IGNORE_RATE_LIMITING`| Secret key sent to Data Fair to bypass rate limiting constraints.                                                                                                        | —       | stack only         |
 | `TRANSPORT`           | Transport mode: `stdio` (standalone) or `http` (stack).                                                                                                                  | `stdio` | standalone/stack   |
 | `PORT`                | Port for the HTTP server to listen on.                                                                                                                                   | `8080`  | stack only         |
@@ -74,10 +75,10 @@ Routes:
 | `MAIN_SITE_URL`       | Origin of the main site. The index and every document are fetched from it; upstream calls swap it for the requesting site's origin. Falls back to `PORTAL_URL` in stdio.| —       | stack only         |
 | `INDEX_PATH`          | Path of the deployment's agent index on the main site.                                                                                                                   | `/data-fair/api/v1/agents/index.json` | stack only |
 | `REFRESH_INTERVAL`    | Seconds between conditional re-fetches of the index and documents; `0` disables.                                                                                         | `300`   | stack only         |
-| `PUBLIC_PROFILES`     | JSON array of the profiles a `public`-mode request may ask for, e.g. `PUBLIC_PROFILES='["explore"]'`.                                                                    | `["explore"]` | stack only (`public`) |
-| `UPSTREAM_PROXY_HOST` | Optional in-cluster reverse proxy (`host` or `host:port`) every site host resolves to, skipping public DNS and the outer proxy hop.                                      | —       | stack only         |
+| `PUBLIC_PROFILES`     | The profiles a `public`-mode request may ask for, as a JSON array or a comma-separated list, e.g. `PUBLIC_PROFILES='["explore"]'` or `PUBLIC_PROFILES=explore`.          | `["explore"]` | stack only (`public`) |
+| `UPSTREAM_PROXY_HOST` | Optional in-cluster reverse proxy (`host` or `host:port`, or a bracketed IPv6 literal such as `[::1]:8080`) every site host resolves to, skipping public DNS and the outer proxy hop. | —       | stack only         |
 | `EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE` | JSON boolean; whether `geocode_address` is composed at all, e.g. `EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE=false`.                                             | `true`  | standalone/stack   |
-| `EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES` | JSON array; `geocode_address` joins the set when the request's profiles intersect this list.                                                          | `["explore"]` | standalone/stack |
+| `EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES` | The profiles `geocode_address` joins, as a JSON array or a comma-separated list, e.g. `'["explore"]'` or `explore`.                                     | `["explore"]` | standalone/stack |
 | `PROFILES`            | Comma-separated list of profiles to compose.                                                                                                                             | `explore` | standalone       |
 
 ## Compatibility
