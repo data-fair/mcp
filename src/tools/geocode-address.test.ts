@@ -13,8 +13,17 @@ describe('geocode_address', () => {
     ign = createServer((req, res) => {
       const url = new URL(req.url!, 'http://x')
       seen.push(url)
-      res.writeHead(200, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ features: url.searchParams.get('q') === 'nowhere' ? [] : [feature('Rennes', -1.68, 48.11)] }))
+      const q = url.searchParams.get('q')
+      if (q === 'error') {
+        res.writeHead(500, { 'content-type': 'text/plain' })
+        res.end('Internal Server Error')
+      } else if (q === 'malformed') {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ features: [{ properties: {} }] }))
+      } else {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ features: q === 'nowhere' ? [] : [feature('Rennes', -1.68, 48.11)] }))
+      }
     })
     await new Promise<void>(resolve => ign.listen(0, '127.0.0.1', resolve))
     base = `http://127.0.0.1:${(ign.address() as any).port}/geocodage/search`
@@ -47,5 +56,11 @@ describe('geocode_address', () => {
     const down = await geocodeAddressTool({ base: 'http://127.0.0.1:1/x' }).execute({ q: 'Rennes' })
     assert.equal(down.isError, true)
     assert.match(down.text, /Geocoding API error/)
+    const failed = await tool.execute({ q: 'error' })
+    assert.equal(failed.isError, true)
+    assert.match(failed.text, /Geocoding API error: HTTP 500/)
+    const broken = await tool.execute({ q: 'malformed' })
+    assert.equal(broken.isError, true)
+    assert.match(broken.text, /Geocoding API error/)
   })
 })
