@@ -64,10 +64,14 @@ export function siteFetch (siteOrigin: string, options: SiteFetchOptions & { dis
       headers.set('referer', `${siteOrigin}/mcp`)
       if (options.ignoreRateLimiting) headers.set('x-ignore-rate-limiting', options.ignoreRateLimiting)
       if (proxy) {
-        headers.set('x-forwarded-host', url.hostname)
-        headers.set('x-forwarded-proto', url.protocol.replace(':', ''))
+        // capture the site's host (with its port, if any) and scheme before the proxy hop
+        // rewrites both, so X-Forwarded-Host/-Proto reflect what the caller actually reached
+        const forwardedHost = url.host
+        const forwardedProto = url.protocol.replace(':', '')
         url.protocol = 'http:'
         url.port = String(proxy.port)
+        headers.set('x-forwarded-host', forwardedHost)
+        headers.set('x-forwarded-proto', forwardedProto)
       }
     }
     const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : req.body
