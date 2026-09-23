@@ -5,22 +5,26 @@
  * call goes and which identity data-fair will see.
  */
 import { createHash } from 'node:crypto'
-import type { Dispatcher } from 'undici'
 import type { CallContext } from '@data-fair/openapi-mcp'
 import type { ApiConfig } from '#config'
-import { siteFetch } from './site-fetch.ts'
+import { siteFetch, type SiteDispatcher } from './site-fetch.ts'
+
+/** host, optionally with a port; case-insensitive, no scheme, no path — rejects anything else */
+const HOST_RE = /^[a-z0-9.-]+(:\d{1,5})?$/i
 
 /** The de-facto standard the reverse proxy sets; the same rule as lib-express's reqOrigin, without throwing. */
 export function originFromForwarded (headers: Headers): string | undefined {
   const host = headers.get('x-forwarded-host')
   const proto = headers.get('x-forwarded-proto')
   if (!host || !proto) return undefined
+  if (proto !== 'http' && proto !== 'https') return undefined
+  if (!HOST_RE.test(host)) return undefined
   const port = headers.get('x-forwarded-port')
   const explicit = port && !(port === '443' && proto === 'https') && !(port === '80' && proto === 'http')
   return `${proto}://${host}${explicit ? ':' + port : ''}`
 }
 
-export function requestContext (options: { config: Pick<ApiConfig, 'mainSiteUrl' | 'ignoreRateLimiting' | 'upstreamProxyHost'>, dispatcher: Dispatcher }): (request: Request | undefined) => CallContext {
+export function requestContext (options: { config: Pick<ApiConfig, 'mainSiteUrl' | 'ignoreRateLimiting'>, dispatcher: SiteDispatcher }): (request: Request | undefined) => CallContext {
   const { config, dispatcher } = options
   return (request) => {
     const headers = request?.headers ?? new Headers()
@@ -32,7 +36,7 @@ export function requestContext (options: { config: Pick<ApiConfig, 'mainSiteUrl'
     if (apiKey) forwarded['x-apikey'] = apiKey
     const secret = cookie ?? apiKey
     return {
-      fetch: siteFetch(siteOrigin, { mainSiteUrl: config.mainSiteUrl!, dispatcher, ignoreRateLimiting: config.ignoreRateLimiting, upstreamProxyHost: config.upstreamProxyHost }),
+      fetch: siteFetch(siteOrigin, { mainSiteUrl: config.mainSiteUrl!, dispatcher, ignoreRateLimiting: config.ignoreRateLimiting }),
       headers: Object.keys(forwarded).length ? forwarded : undefined,
       identity: secret ? createHash('sha256').update(secret).digest('hex') : undefined
     }

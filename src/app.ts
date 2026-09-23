@@ -3,15 +3,15 @@ import { readFileSync } from 'node:fs'
 import { createSiteMiddleware, errorHandler, assertReqInternal } from '@data-fair/lib-express'
 import { createMcpHttpHandler } from '@data-fair/openapi-mcp/adapters/mcp'
 import { toNodeHandler } from '@modelcontextprotocol/node'
-import type { Dispatcher } from 'undici'
 import config from '#config'
 import { rateLimitingMiddleware } from './rate-limiting.ts'
 import { requestContext, originFromForwarded } from './context.ts'
 import { registryDocument } from './registry.ts'
 import type { Composition } from './composition.ts'
+import type { SiteDispatcher } from './site-fetch.ts'
 
 const version: string = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
-const cacheable = (res: Response) => res.set('Cache-Control', 'public, max-age=300')
+const cacheable = (res: Response) => res.set({ 'Cache-Control': 'public, max-age=300', Vary: 'X-Forwarded-Host' })
 const headersOf = (req: Request) => new Headers(Object.entries(req.headers).flatMap(([k, v]) => v === undefined ? [] : [[k, Array.isArray(v) ? v.join(', ') : v] as [string, string]]))
 const siteOf = (req: Request) => originFromForwarded(headersOf(req)) ?? config.mainSiteUrl!
 /**
@@ -26,7 +26,7 @@ const profilesOf = (search: URLSearchParams): string[] => {
   return list.length ? list : ['explore']
 }
 
-export function createApp (composition: Composition, dispatcher: Dispatcher) {
+export function createApp (composition: Composition, dispatcher: SiteDispatcher) {
   const app = express()
   app.set('query parser', 'simple')
   app.set('json spaces', 2)
@@ -42,7 +42,7 @@ export function createApp (composition: Composition, dispatcher: Dispatcher) {
   const cors = (req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Mcp-Protocol-Version, Mcp-Method, Mcp-Name')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Mcp-Protocol-Version, Mcp-Method, Mcp-Name, x-apiKey, Mcp-Session-Id')
     res.setHeader('Access-Control-Expose-Headers', 'Content-Type')
     if (req.method === 'OPTIONS') { res.status(204).end(); return }
     next()

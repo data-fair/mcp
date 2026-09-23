@@ -1,6 +1,6 @@
 import { RateLimiter } from 'limiter'
 import { type Request, type Response, type NextFunction } from 'express'
-import { reqIp } from '@data-fair/lib-express/req-origin.js'
+import { reqIp, reqIsInternal } from '@data-fair/lib-express/req-origin.js'
 import Debug from 'debug'
 import config from '#config'
 
@@ -43,6 +43,9 @@ const consume = (req: Request): boolean => {
 }
 
 export const rateLimitingMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  // an internal caller (no reverse proxy in front of it) has no X-Forwarded-For to key on,
+  // and reqIp would throw; it is also not who per-IP limiting is meant to constrain.
+  if (reqIsInternal(req)) return next()
   if (!consume(req)) {
     debug('rate limit exceeded for', reqIp(req))
     res.status(429).type('text/plain').send('Rate limit exceeded')

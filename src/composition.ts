@@ -3,9 +3,8 @@
  * set, the compatibility alias, the extra tools, and the refresh loop.
  */
 import { createComposer, type Composer, type ToolSet } from '@data-fair/openapi-mcp'
-import type { Dispatcher } from 'undici'
 import type { ApiConfig } from '#config'
-import { siteFetch } from './site-fetch.ts'
+import { siteFetch, type SiteDispatcher } from './site-fetch.ts'
 import { geocodeAddressTool } from './tools/geocode-address.ts'
 
 export interface Composition {
@@ -18,9 +17,9 @@ export interface Composition {
   close (): void
 }
 
-export async function createComposition (options: { config: Pick<ApiConfig, 'locale' | 'indexPath' | 'refreshInterval' | 'extraTools' | 'ignoreRateLimiting' | 'upstreamProxyHost'>, dispatcher: Dispatcher, mainSiteUrl: string }): Promise<Composition> {
+export async function createComposition (options: { config: Pick<ApiConfig, 'locale' | 'indexPath' | 'refreshInterval' | 'extraTools' | 'ignoreRateLimiting'>, dispatcher: SiteDispatcher, mainSiteUrl: string }): Promise<Composition> {
   const { config, dispatcher, mainSiteUrl } = options
-  const fetchFn = siteFetch(mainSiteUrl, { mainSiteUrl, dispatcher, ignoreRateLimiting: config.ignoreRateLimiting, upstreamProxyHost: config.upstreamProxyHost })
+  const fetchFn = siteFetch(mainSiteUrl, { mainSiteUrl, dispatcher, ignoreRateLimiting: config.ignoreRateLimiting })
   const composer = await createComposer(`${mainSiteUrl}${config.indexPath}`, { fetch: fetchFn, locale: config.locale, lint: 'warn' })
   for (const s of composer.services) if (s.status !== 'ok') console.warn(`service ${s.id}: ${s.status}${s.reason ? ` — ${s.reason}` : ''}`)
 

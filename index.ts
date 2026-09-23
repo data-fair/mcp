@@ -26,7 +26,9 @@ if (config.transport === 'http') {
   const mainSiteUrl = config.mainSiteUrl ?? config.portalUrl
   if (!mainSiteUrl) { console.error('PORTAL_URL (or MAIN_SITE_URL) is required in stdio mode'); process.exit(1) }
   const dispatcher = createDispatcher({ mainSiteUrl, timeoutMs: 30_000 })
-  const composition = await createComposition({ config, dispatcher, mainSiteUrl })
+  // stdio sends no rate-limit bypass secret to the site it composes over (spec §4): a
+  // deployment sharing config.ignoreRateLimiting with a stack sibling must not leak it here.
+  const composition = await createComposition({ config: { ...config, ignoreRateLimiting: undefined }, dispatcher, mainSiteUrl })
   const profiles = (process.env.PROFILES ?? 'explore').split(',').map(s => s.trim()).filter(Boolean)
   const { siteFetch } = await import('./src/site-fetch.ts')
   const headers = config.dataFairAPIKey ? { 'x-apikey': config.dataFairAPIKey } : undefined

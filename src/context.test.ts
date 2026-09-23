@@ -15,6 +15,21 @@ describe('context', () => {
     assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https', 'x-forwarded-port': '443' })), 'https://portal.test')
     assert.equal(originFromForwarded(new Headers({})), undefined)
   })
+  it('rejects a malformed host or scheme instead of building a bad origin', () => {
+    assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'evil.test/../x', 'x-forwarded-proto': 'https' })), undefined)
+    assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'evil.test\\@ok.test', 'x-forwarded-proto': 'https' })), undefined)
+    assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'javascript' })), undefined)
+    assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'portal.test:notaport', 'x-forwarded-proto': 'https' })), undefined)
+    // still valid: uppercase and a normal port are accepted
+    assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'Portal.Test:8080', 'x-forwarded-proto': 'https' })), 'https://Portal.Test:8080')
+  })
+  it('does not throw building a context from malformed forwarded headers, and forwards no identity for them', () => {
+    // originFromForwarded rejects the header, so requestContext falls back to config.mainSiteUrl
+    // instead of building a request against an attacker-controlled host or throwing
+    const ctx = ctxOf({ 'x-forwarded-host': 'evil.test/../x', 'x-forwarded-proto': 'https' })
+    assert.equal(typeof ctx.fetch, 'function')
+    assert.equal(ctx.headers, undefined)
+  })
   it('forwards the cookie and API key, hashes them into an identity, and nothing else', () => {
     const ctx = ctxOf({ cookie: 'id_token=abc', 'x-api-key': 'k', authorization: 'Bearer nope', 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https' })
     assert.deepEqual(ctx.headers, { cookie: 'id_token=abc', 'x-apikey': 'k' })

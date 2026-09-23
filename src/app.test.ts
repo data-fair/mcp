@@ -76,10 +76,28 @@ describe('app', () => {
       await client.close()
     })
     it('lists only public profiles in the registry and keeps /status internal', async () => {
-      const reg: any = await (await fetch(`${base}/mcp-server/v0/servers`, { headers: PROXY })).json()
+      const res = await fetch(`${base}/mcp-server/v0/servers`, { headers: PROXY })
+      assert.equal(res.headers.get('vary'), 'X-Forwarded-Host')
+      const reg: any = await res.json()
       assert.deepEqual(reg.servers.map((s: any) => s.server.name), ['fr.data-fair/explore'])
       assert.equal(reg.servers[0].server.remotes[0].url, 'https://portal.test/mcp-server/mcp?profiles=explore')
       assert.equal((await fetch(`${base}/mcp-server/status`, { headers: PROXY })).status, 421)
+    })
+    it('answers a proxied caller to /status and /v0/servers with the ordinary status, not a 500', async () => {
+      // a proxied request (X-Forwarded-Host present) is not internal: /status still refuses it,
+      // but the limiter itself must not throw building the rate-limit key
+      assert.equal((await fetch(`${base}/mcp-server/status`, { headers: PROXY })).status, 421)
+      assert.equal((await fetch(`${base}/mcp-server/v0/servers`, { headers: PROXY })).status, 200)
+    })
+    it('lets an internal caller (no forwarded headers) reach /status and /v0/servers instead of 500ing on the rate limiter', async () => {
+      assert.equal((await fetch(`${base}/mcp-server/status`)).status, 200)
+      assert.equal((await fetch(`${base}/mcp-server/v0/servers`)).status, 200)
+    })
+    it('sets the CORS allow-headers clients need for the session id and the API key', async () => {
+      const res = await fetch(`${base}/mcp-server/mcp`, { method: 'OPTIONS' })
+      const allow = res.headers.get('access-control-allow-headers') ?? ''
+      assert.match(allow, /x-apiKey/)
+      assert.match(allow, /Mcp-Session-Id/)
     })
     it('rate-limits per IP', async () => {
       const before = config.defaultLimits.apiRate!.nb

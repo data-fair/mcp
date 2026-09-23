@@ -1,7 +1,7 @@
 import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer, type Server } from 'node:http'
-import { createDispatcher, siteFetch } from './site-fetch.ts'
+import { createDispatcher, siteFetch, proxyTarget } from './site-fetch.ts'
 
 /** Echoes what reached it: host, path, and the headers the server is expected to set. */
 const echo = () => createServer((req, res) => {
@@ -9,6 +9,16 @@ const echo = () => createServer((req, res) => {
   res.end(JSON.stringify({ host: req.headers.host, url: req.url, headers: req.headers }))
 })
 const listen = async (s: Server) => { await new Promise<void>(resolve => s.listen(0, '127.0.0.1', resolve)); return (s.address() as any).port as number }
+
+describe('proxyTarget', () => {
+  it('parses host, host:port, and a bracketed IPv6 literal with or without a port', () => {
+    assert.deepEqual(proxyTarget('nginx'), { host: 'nginx', port: 80 })
+    assert.deepEqual(proxyTarget('nginx:8080'), { host: 'nginx', port: 8080 })
+    assert.deepEqual(proxyTarget('[::1]:8080'), { host: '::1', port: 8080 })
+    assert.deepEqual(proxyTarget('[::1]'), { host: '::1', port: 80 })
+    assert.deepEqual(proxyTarget('[2001:db8::1]:9090'), { host: '2001:db8::1', port: 9090 })
+  })
+})
 
 describe('siteFetch', () => {
   let upstream: Server, port: number
@@ -28,19 +38,23 @@ describe('siteFetch', () => {
     assert.equal(body.headers['user-agent'], '@data-fair/mcp')
   })
 
-  it('leaves a foreign origin alone', async () => {
+  it('leaves a foreign origin alone, and strips the caller\'s credentials for it', async () => {
     const main = 'https://main.test'
     const dispatcher = createDispatcher({ mainSiteUrl: main })
-    const f = siteFetch('https://site.test', { mainSiteUrl: main, dispatcher })
-    const body: any = await (await f(`http://127.0.0.1:${port}/elsewhere`)).json()
+    const f = siteFetch('https://site.test', { mainSiteUrl: main, dispatcher, ignoreRateLimiting: 'secret' })
+    const body: any = await (await f(new Request(`http://127.0.0.1:${port}/elsewhere`, { headers: { cookie: 'id_token=abc', 'x-apikey': 'k' } }))).json()
     assert.equal(body.url, '/elsewhere')
     assert.equal(body.host, `127.0.0.1:${port}`)
+    assert.equal(body.headers.cookie, undefined)
+    assert.equal(body.headers['x-apikey'], undefined)
+    assert.equal(body.headers['x-ignore-rate-limiting'], undefined)
+    assert.equal(body.headers.referer, undefined)
   })
 
   it('dispatches every site host to the upstream proxy, keeping Host and adding X-Forwarded-*', async () => {
     const main = 'https://main.test'
     const dispatcher = createDispatcher({ mainSiteUrl: main, upstreamProxyHost: `127.0.0.1:${port}` })
-    const f = siteFetch('https://portal.test', { mainSiteUrl: main, dispatcher, upstreamProxyHost: `127.0.0.1:${port}` })
+    const f = siteFetch('https://portal.test', { mainSiteUrl: main, dispatcher })
     const body: any = await (await f(`${main}/data-fair/api/v1/ping`)).json()
     assert.equal(body.host, `portal.test:${port}`)
     assert.equal(body.headers['x-forwarded-host'], 'portal.test')
@@ -51,7 +65,7 @@ describe('siteFetch', () => {
   it('keeps the site origin\'s own port in X-Forwarded-Host on the proxy hop', async () => {
     const main = 'https://main.test'
     const dispatcher = createDispatcher({ mainSiteUrl: main, upstreamProxyHost: `127.0.0.1:${port}` })
-    const f = siteFetch('https://portal.test:9443', { mainSiteUrl: main, dispatcher, upstreamProxyHost: `127.0.0.1:${port}` })
+    const f = siteFetch('https://portal.test:9443', { mainSiteUrl: main, dispatcher })
     const body: any = await (await f(`${main}/data-fair/api/v1/ping`)).json()
     assert.equal(body.host, `portal.test:${port}`)
     assert.equal(body.headers['x-forwarded-host'], 'portal.test:9443')
@@ -62,7 +76,7 @@ describe('siteFetch', () => {
   it('never lets a mainSiteUrl port leak into a portless site host on the proxy hop', async () => {
     const main = `http://127.0.0.1:${port}`
     const dispatcher = createDispatcher({ mainSiteUrl: main, upstreamProxyHost: `127.0.0.1:${port}` })
-    const f = siteFetch('https://portal.test', { mainSiteUrl: main, dispatcher, upstreamProxyHost: `127.0.0.1:${port}` })
+    const f = siteFetch('https://portal.test', { mainSiteUrl: main, dispatcher })
     const body: any = await (await f(`${main}/data-fair/api/v1/ping`)).json()
     assert.equal(body.headers['x-forwarded-host'], 'portal.test')
     assert.equal(body.host, `portal.test:${port}`)
