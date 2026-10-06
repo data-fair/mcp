@@ -229,7 +229,7 @@ In `src/app.test.ts`:
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `npm test`
-Expected: FAIL in `src/config.test.ts` (defaults still `['explore']`) and and nowhere else. The new composition and app tests pass already — the regenerated index declares `catalog`, `manage` and the `explore` alias, and the server's default set reaches catalog through it. They pin behaviour this task must keep while the defaults move; only the config test is red. Record that in the ledger.
+Expected: FAIL in `src/config.test.ts` (defaults still `['explore']`) and nowhere else. The new composition and app tests pass already — the regenerated index declares `catalog`, `manage` and the `explore` alias, and the server's default set reaches catalog through it. They pin behaviour this task must keep while the defaults move; only the config test is red. Record that in the ledger.
 
 - [ ] **Step 3: Implement**
 
