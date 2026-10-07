@@ -1,31 +1,32 @@
-# Catalog Profile (Agent Profiles Rollout Step 3) Implementation Plan
+# Catalog Profile, One Published Server (Agent Profiles Rollout Step 3) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move the MCP server from the `explore` profile to the profile vocabulary data-fair now declares: `catalog` by default and in public mode, `catalog` for the `/datasets/mcp` compatibility route, the grid umbrellas in the internal registry, on `@data-fair/openapi-mcp` 0.4.0.
+**Goal:** Move the MCP server to the profile vocabulary data-fair declares, as one published server with no public/internal mode: `catalog` by default, every declared profile reachable, `catalog` for the `/datasets/mcp` compatibility route, one registry listing `catalog` and the grid umbrellas, a rate limiter always on and keyed by the caller, on `@data-fair/openapi-mcp` 0.4.0.
 
-**Architecture:** The server keeps its shape (one composer, a public gate, the alias route, the registry). What changes is configuration defaults, the profile the alias composes, which profiles the registry advertises per mode, and the test site, whose fixtures are regenerated from data-fair's own generators by a script so they follow data-fair instead of drifting.
+**Architecture:** The server keeps one composer, the alias route and the registry; the `mode` setting, `PUBLIC_PROFILES` and the profile gate go away (parity: an agent of ours reaches the server like any other client, and what a caller may do is data-fair's permissions on its identity). The limiter keys on the caller's credential identity, else its IP. The test site's fixtures are regenerated from data-fair's own generators by a script.
 
 **Tech Stack:** TypeScript on Node 24, Express 5, `node:test`, `@data-fair/openapi-mcp` 0.4.0.
 
-**Spec:** `~/data-fair/data-fair_chore-structure-openapi-cp/docs/architecture/agent-profiles.md`, section 8 "The `mcp` server" and section 10 (release order).
+**Spec:** data-fair `docs/architecture/agent-profiles.md` §8 ("The `mcp` server") and §10, and `docs/architecture/agent-rate-limiting.md` §3 (intermediate state), both in `~/data-fair/data-fair_chore-structure-openapi-cp`.
 
 ## Global Constraints
 
-- "Public mode exposes `catalog` only (`PUBLIC_PROFILES` defaults to `["catalog"]`), and `/v0/servers` lists it alone." For one release the public default also accepts the deprecated `explore` (the index declares it as an alias including `catalog`), so clients configured with `?profiles=explore` keep working; the registry never advertises `explore`.
-- "Internal mode … accepts any combination of declared profiles; `/v0/servers` lists `catalog` and the umbrellas" (`read`, `write`, `manage`).
-- "The compatibility route `/datasets/mcp` composes `catalog` from data-fair with no prefix: the historical names."
-- `@data-fair/openapi-mcp` `^0.4.0` (data-fair's document uses views and linked skills, which 0.2.x refuses — spec §10).
-- Defaults move from `explore` to `catalog`: `PROFILES` (stdio), the `/mcp` handler's default set, `extraTools.geocodeAddress.profiles`.
-- Work on branch `feat-catalog-profile` (from `feat-openapi-mcp`). Gate: `npm run lint && npm run check-types && npm test`.
+- "One published server, no public/internal split … every declared profile is available to every caller … `catalog` is the default set."
+- "`/v0/servers` lists `catalog` and the umbrellas (`read`, `write`, `manage`) … the deprecated `explore` is accepted but never listed."
+- "The compatibility route `/datasets/mcp` composes `catalog` from data-fair with no prefix."
+- Rate limiting, intermediate state: "Its own limiter is always on, keyed by the caller's identity (the hash of its cookie or API key …) when authenticated, by client IP otherwise. It still sends `x-ignore-rate-limiting` to data-fair."
+- `@data-fair/openapi-mcp` `^0.4.0`.
+- Defaults move from `explore` to `catalog`: `PROFILES` (stdio), the `/mcp` default set; `extraTools.geocodeAddress.profiles` defaults to `["catalog", "explore"]` (the alias keeps geocoding for clients still configured with it).
+- Work directly on branch `feat-openapi-mcp`. Gate: `npm run lint && npm run check-types && npm test`.
 
 ## Review Focus
 
-1. A client still configured with `/mcp?profiles=explore` in public mode → served the catalog tools, not a 403. (Task 2)
+1. A client still configured with `/mcp?profiles=explore` → served the catalog tools. (Task 2)
 2. The catalog `list_datasets` tool → calls `/data-fair/api/v1/catalog/datasets` on the requesting site, with the caller's identity and the forwarded host. (Task 1)
-3. A data-fair document change after the fixtures are regenerated → `scripts/refresh-fixtures.ts` reproduces the fixtures byte for byte from a data-fair checkout. (Task 1)
-4. The registry in public mode → `fr.data-fair/catalog` only, never `explore`; in internal mode → `catalog`, `read`, `write`, `manage`, in that order, each only if the index declares it. (Task 3)
-5. The linked `workflow` skill → resolved from the site (no warning on the data-fair service status). (Task 1)
+3. Two authenticated callers behind one IP → separate rate-limit budgets; one caller switching IPs → one budget. (Task 3)
+4. The registry → `catalog`, `read`, `write`, `manage` in that order, each only if the index declares it, never `explore`. (Task 4)
+5. A caller asking for an undeclared profile → refused, not served an empty set. (Task 2)
 
 ---
 
@@ -35,15 +36,16 @@
 |---|---|---|
 | `package.json`, `package-lock.json` | dependencies | `@data-fair/openapi-mcp` `^0.4.0` |
 | `scripts/refresh-fixtures.ts` | regenerate test fixtures from a data-fair checkout | create |
-| `test/fixtures/data-fair-api-docs.json`, `test/fixtures/data-fair-agents-index.json`, `test/fixtures/data-fair-skills/*.md` | fixtures | regenerate / create |
+| `test/fixtures/*` | fixtures | regenerate / create |
 | `test/fake-site.ts` | test site | serve the index fixture, skill files, `/catalog/datasets` |
-| `config/default.cjs`, `config/type/schema.json` | defaults | `catalog` |
+| `config/default.cjs`, `config/custom-environment-variables.cjs`, `config/type/schema.json`, `src/config.ts` | configuration | drop `mode` and `publicProfiles`; geocode defaults |
 | `index.ts` | stdio entry | `PROFILES` default |
-| `src/app.ts` | HTTP routes | default set |
+| `src/app.ts` | HTTP routes | no gate, limiter always, default set, `/status` |
 | `src/composition.ts` | composer | alias on `catalog` |
-| `src/registry.ts` | `/v0/servers` | per-mode profile lists |
+| `src/context.ts`, `src/rate-limiting.ts` | caller identity, limiter | shared `credentialIdentity`, per-caller key |
+| `src/registry.ts` | `/v0/servers` | one profile list |
 | tests in `src/` | | per task |
-| `README.md`, `AGENTS.md` | docs | profiles |
+| `README.md`, `AGENTS.md` | docs | one server, profiles, rate limiting |
 
 ---
 
@@ -169,30 +171,27 @@ git commit -m "chore: openapi-mcp 0.4.0, test fixtures regenerated from data-fai
 
 ---
 
-### Task 2: `catalog` by default, `explore` kept as a deprecated alias
+### Task 2: One server — no mode, no gate, `catalog` by default
 
 **Files:**
-- Modify: `config/default.cjs`, `config/type/schema.json`, `index.ts`, `src/app.ts`, `src/composition.ts`
-- Test: `src/app.test.ts`, `src/composition.test.ts`, `src/config.test.ts`
+- Modify: `config/default.cjs`, `config/custom-environment-variables.cjs`, `config/type/schema.json`, `src/config.ts`, `index.ts`, `src/app.ts`, `src/composition.ts`, `src/context.ts` (doc comment only)
+- Rewrite: `src/app.test.ts`; modify `src/config.test.ts`, `src/composition.test.ts`
 
 **Interfaces:**
-- Produces: `config.publicProfiles` default `['catalog', 'explore']`; `config.extraTools.geocodeAddress.profiles` default `['catalog', 'explore']`; `/mcp` default set `['catalog']`; `alias()` composes `catalog`.
+- Produces: no `config.mode`, no `config.publicProfiles`; `normalizeProfileLists` handles `extraTools.geocodeAddress.profiles` only; `/mcp` serves any declared profile, default `['catalog']`; `alias()` composes `catalog`; the limiter is mounted on `/mcp`, `/datasets/mcp` and `/v0/servers` unconditionally; `/status` refuses proxied callers (`assertReqInternal`) unconditionally.
 
 - [ ] **Step 1: Write the failing tests**
 
-In `src/config.test.ts`, replace the default assertions:
+`src/config.test.ts`: in "has the composed server defaults", delete the `mode` and `publicProfiles` assertions and add:
 
 ```ts
-    assert.deepEqual(config.publicProfiles, ['catalog', 'explore'])
+    assert.equal((config as any).mode, undefined, 'one published server: no mode')
+    assert.equal((config as any).publicProfiles, undefined)
 ```
 
-and
+and change the extraTools assertion to `assert.deepEqual(config.extraTools, { geocodeAddress: { active: true, profiles: ['catalog', 'explore'] } })`. In the three `normalizeProfileLists` tests, drop the `publicProfiles` input and assertions, keeping the geocode ones (e.g. `normalizeProfileLists({ extraTools: { geocodeAddress: { profiles: '["catalog"]' } } })` → `['catalog']`).
 
-```ts
-    assert.deepEqual(config.extraTools, { geocodeAddress: { active: true, profiles: ['catalog', 'explore'] } })
-```
-
-In `src/composition.test.ts`, in the `before` and in the "leaves geocode_address out" test, replace `profiles: ['explore']` with `profiles: ['catalog', 'explore']`, and add:
+`src/composition.test.ts`: replace `profiles: ['explore']` with `profiles: ['catalog', 'explore']` in both configs, and add:
 
 ```ts
   it('composes the catalog set, which explore reaches through the index alias', async () => {
@@ -208,42 +207,145 @@ In `src/composition.test.ts`, in the `before` and in the "leaves geocode_address
   })
 ```
 
-In `src/app.test.ts`:
-- in the boot `Object.assign(config, { … publicProfiles: ['explore'] … })`, use `publicProfiles: ['catalog', 'explore']`;
-- add inside `describe('public mode', …)`:
+Replace the whole content of `src/app.test.ts` with:
 
 ```ts
-    it('serves catalog by default, and explore to clients still configured with it', async () => {
-      for (const path of ['/mcp-server/mcp', '/mcp-server/mcp?profiles=catalog', '/mcp-server/mcp?profiles=explore']) {
-        const client = await connect(path, PROXY)
-        assert.equal((await client.listTools()).tools[0].name, 'datafair_list_datasets', path)
-        await client.close()
-      }
-    })
-    it('refuses the grid in public mode', async () => {
-      const res = await fetch(`${base}/mcp-server/mcp?profiles=read`, { method: 'POST', headers: { ...PROXY, 'content-type': 'application/json' }, body: '{}' })
-      assert.equal(res.status, 403)
-    })
+import { describe, it, before, after } from 'node:test'
+import assert from 'node:assert/strict'
+import { createServer, type Server } from 'node:http'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import { startFakeSite, type FakeSite } from '../test/fake-site.ts'
+import config from '#config'
+
+const PROXY = { 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https', 'x-forwarded-for': '203.0.113.7' }
+
+describe('app', () => {
+  let site: FakeSite, http: Server, base: string
+  const connect = async (path: string, headers: Record<string, string> = {}) => {
+    const client = new Client({ name: 'c', version: '0' }, { versionNegotiation: { mode: 'auto' } })
+    await client.connect(new StreamableHTTPClientTransport(new URL(base + path), { requestInit: { headers } }))
+    return client
+  }
+  const names = async (path: string, headers: Record<string, string> = PROXY) => {
+    const client = await connect(path, headers)
+    try { return (await client.listTools()).tools.map(t => t.name) } finally { await client.close() }
+  }
+  before(async () => {
+    site = await startFakeSite()
+    Object.assign(config, { mainSiteUrl: site.origin, refreshInterval: 0, ignoreRateLimiting: 'secret', upstreamProxyHost: `127.0.0.1:${site.port}` })
+    const { createDispatcher } = await import('./site-fetch.ts')
+    const { createComposition } = await import('./composition.ts')
+    const { createApp } = await import('./app.ts')
+    const dispatcher = createDispatcher({ mainSiteUrl: site.origin, upstreamProxyHost: config.upstreamProxyHost })
+    const composition = await createComposition({ config, dispatcher, mainSiteUrl: site.origin })
+    http = createServer(createApp(composition, dispatcher))
+    await new Promise<void>(resolve => http.listen(0, '127.0.0.1', resolve))
+    base = `http://127.0.0.1:${(http.address() as any).port}`
+  })
+  after(async () => { http.close(); await site.close() })
+
+  it('serves the catalog set by default and calls the requesting site with the caller identity', async () => {
+    const client = await connect('/mcp-server/mcp', { ...PROXY, cookie: 'id_token=abc' })
+    const { tools } = await client.listTools()
+    assert.equal(tools[0].name, 'datafair_list_datasets')
+    assert.ok(tools.some(t => t.name === 'geocode_address'))
+    const res: any = await client.callTool({ name: 'datafair_list_datasets', arguments: {} })
+    assert.match(res.content[0].text, /cookie=id_token=abc/)
+    const hit = site.hits.at(-1)!
+    assert.equal(hit.headers.referer, 'https://portal.test/mcp')
+    assert.equal(hit.headers['x-ignore-rate-limiting'], 'secret')
+    assert.equal(hit.headers['x-forwarded-host'], 'portal.test')
+    await client.close()
+  })
+  it('serves explore to clients still configured with it', async () => {
+    assert.deepEqual(await names('/mcp-server/mcp?profiles=explore'), await names('/mcp-server/mcp?profiles=catalog'))
+  })
+  it('serves the grid to any caller: what it may do is data-fair permissions on its identity', async () => {
+    const tools = await names('/mcp-server/mcp?profiles=read')
+    assert.ok(tools.includes('datafair_list_account_datasets'))
+    const both = await names('/mcp-server/mcp?profiles=catalog,read')
+    assert.ok(both.includes('datafair_list_datasets') && both.includes('datafair_list_account_datasets'), 'catalog and the grid combine')
+  })
+  it('refuses an undeclared profile, including when repeated or blank-padded', async () => {
+    for (const q of ['profiles=nope', 'profiles=catalog&profiles=nope', 'profiles=%20nope%20']) {
+      await assert.rejects(async () => { await names(`/mcp-server/mcp?${q}`) }, q)
+    }
+  })
+  it('serves an in-cluster caller (no forwarded headers) on the main site', async () => {
+    const client = await connect('/mcp?profiles=catalog')
+    const res: any = await client.callTool({ name: 'datafair_list_datasets', arguments: {} })
+    assert.match(res.content[0].text, /Seen by 127\.0\.0\.1:\d+/)
+    await client.close()
+  })
+  it('serves the alias at /mcp-server/datasets/mcp with the seven names, whatever the profiles', async () => {
+    for (const path of ['/mcp-server/datasets/mcp', '/mcp-server/datasets/mcp?profiles=manage']) {
+      assert.deepEqual(await names(path), ['list_datasets', 'describe_dataset', 'search_data', 'get_field_values', 'aggregate_data', 'calculate_metric', 'geocode_address'], path)
+    }
+  })
+  it('keeps /status for in-cluster callers', async () => {
+    assert.equal((await fetch(`${base}/mcp-server/status`, { headers: PROXY })).status, 421)
+    const status: any = await (await fetch(`${base}/status`)).json()
+    assert.deepEqual(status.services.map((s: any) => s.id), ['data-fair'])
+    assert.equal(status.mode, undefined)
+  })
+  it('answers /v0/servers to proxied and in-cluster callers', async () => {
+    const res = await fetch(`${base}/mcp-server/v0/servers`, { headers: PROXY })
+    assert.equal(res.status, 200)
+    assert.equal(res.headers.get('vary'), 'X-Forwarded-Host')
+    assert.equal((await fetch(`${base}/mcp-server/v0/servers`)).status, 200)
+  })
+  it('sets the CORS allow-headers clients need for the session id and the API key', async () => {
+    const res = await fetch(`${base}/mcp-server/mcp`, { method: 'OPTIONS' })
+    const allow = res.headers.get('access-control-allow-headers') ?? ''
+    assert.match(allow, /x-apiKey/)
+    assert.match(allow, /Mcp-Session-Id/)
+  })
+  it('rate-limits anonymous callers per IP', async () => {
+    const before = config.defaultLimits.apiRate!.nb
+    config.defaultLimits.apiRate!.nb = 1
+    try {
+      const h = { ...PROXY, 'x-forwarded-for': '198.51.100.9' }
+      await fetch(`${base}/mcp-server/v0/servers`, { headers: h })
+      assert.equal((await fetch(`${base}/mcp-server/v0/servers`, { headers: h })).status, 429)
+    } finally { config.defaultLimits.apiRate!.nb = before }
+  })
+})
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `npm test`
-Expected: FAIL in `src/config.test.ts` (defaults still `['explore']`) and nowhere else. The new composition and app tests pass already — the regenerated index declares `catalog`, `manage` and the `explore` alias, and the server's default set reaches catalog through it. They pin behaviour this task must keep while the defaults move; only the config test is red. Record that in the ledger.
+Expected: FAIL — the config still has `mode`/`publicProfiles`; "serves the grid" gets 403 (the gate, `mode` defaults to `public`); "keeps /status" reports `mode`. The catalog/explore composition tests may pass already (the regenerated index declares them) — note which in the ledger.
 
 - [ ] **Step 3: Implement**
 
-`config/default.cjs`: `publicProfiles: ['catalog', 'explore'],` and `geocodeAddress: { active: true, profiles: ['catalog', 'explore'] }`.
-
-`config/type/schema.json`: set the `default` of `publicProfiles` to `["catalog", "explore"]` and of `extraTools.geocodeAddress.profiles` to `["catalog", "explore"]`; in the `publicProfiles` description, add: `explore is a deprecated alias of catalog, kept for one release.`
+Configuration:
+- `config/default.cjs`: delete `mode: 'public',` and `publicProfiles: ['explore'],`; set `geocodeAddress: { active: true, profiles: ['catalog', 'explore'] }`.
+- `config/custom-environment-variables.cjs`: delete the `mode` and `publicProfiles` lines.
+- `config/type/schema.json`: remove `"mode"` and `"publicProfiles"` from `required` and from `properties`; set the `default` of `extraTools.geocodeAddress.profiles` to `["catalog", "explore"]`.
+- `src/config.ts`: remove the `publicProfiles` handling from `normalizeProfileLists` (type parameter and body) and from its doc comment.
+- Run `npm run build-types` (the config type is generated from the schema).
 
 `index.ts`: replace `(process.env.PROFILES ?? 'explore')` with `(process.env.PROFILES ?? 'catalog')`.
 
-`src/app.ts`:
-- in `profilesOf`, replace `return list.length ? list : ['explore']` with `return list.length ? list : ['catalog']`, and in its doc comment replace "default `explore` set" with "default `catalog` set";
-- in the `main` handler, replace `: ['explore']` with `: ['catalog']`.
+`src/composition.ts`: in `alias()`, compose `['catalog']` instead of `['explore']`; doc comment `/** data-fair's catalog operations under their pre-v2 names, plus geocode_address */`.
 
-`src/composition.ts`: in `alias()`, replace `composer.compose(['explore'], …)` with `composer.compose(['catalog'], …)`, and its doc comment with `/** data-fair's catalog operations under their pre-v2 names, plus geocode_address */`.
+`src/app.ts`:
+- in `profilesOf`, default `['catalog']`, doc comment "the default `catalog` set";
+- replace the limiter comment and line with:
+
+```ts
+  // One published server (parity: our agents reach it like any other client), limited per
+  // caller on every route; see data-fair docs/architecture/agent-rate-limiting.md.
+  const limiter = [rateLimitingMiddleware]
+```
+
+- delete the `profileGate` middleware and its comment, and remove `profileGate` from the `/mcp` route;
+- in the `main` handler, default `['catalog']`;
+- in `/v0/servers`, pass `profiles: undefined` for now (Task 4 sets the list);
+- in `/status`: `assertReqInternal(req)` unconditionally, and drop `mode` from the JSON.
+
+`src/context.ts`: in the header comment, replace "the mode decides what a request may ask for (app.ts)" with "data-fair's permissions decide what a caller may do".
 
 - [ ] **Step 4: Run the tests**
 
@@ -253,71 +355,139 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add config index.ts src/app.ts src/composition.ts src/app.test.ts src/composition.test.ts src/config.test.ts
-git commit -m "feat: catalog is the default and public profile, explore kept as a deprecated alias"
+git add config index.ts src
+git commit -m "feat!: one published server — no mode, every declared profile, catalog by default"
 ```
 
 ---
 
-### Task 3: The registry per mode
+### Task 3: The limiter keys on the caller
 
 **Files:**
-- Modify: `src/registry.ts`, `src/app.ts` (the `/v0/servers` route)
+- Modify: `src/context.ts`, `src/rate-limiting.ts`
 - Test: `src/app.test.ts`
 
 **Interfaces:**
-- Produces: `registryDocument({ composer, siteOrigin, version, locale, profiles })` where `profiles` is now always given: public mode `config.publicProfiles` minus `DEPRECATED_PROFILES`, internal mode `REGISTRY_PROFILES` (`['catalog', 'read', 'write', 'manage']`); listed in that order, only the ones the composer declares.
+- Produces: `credentialIdentity(headers: { cookie?: string | null, apiKey?: string | null }): string | undefined` exported from `src/context.ts` (sha256 hex of the cookie, else of the API key), used by `requestContext` for `identity` and by the limiter; limiter key `identity:<hash>` or `ip:<reqIp>`.
 
-- [ ] **Step 1: Write the failing tests**
+- [ ] **Step 1: Write the failing test**
 
-In `src/app.test.ts`, public mode, replace the two registry assertions of "lists only public profiles in the registry …" with:
-
-```ts
-      assert.deepEqual(reg.servers.map((s: any) => s.server.name), ['fr.data-fair/catalog'], 'explore is accepted, never advertised')
-      assert.equal(reg.servers[0].server.remotes[0].url, 'https://portal.test/mcp-server/mcp?profiles=catalog')
-```
-
-Internal mode, in "serves any declared profile …", replace `assert.ok(reg.servers.length >= 1)` with:
+Append inside `describe('app', …)` in `src/app.test.ts`:
 
 ```ts
-      assert.deepEqual(reg.servers.map((s: any) => s.server.name), ['fr.data-fair/catalog', 'fr.data-fair/read', 'fr.data-fair/write', 'fr.data-fair/manage'])
+  it('rate-limits authenticated callers per identity, not per IP', async () => {
+    const before = config.defaultLimits.apiRate!.nb
+    config.defaultLimits.apiRate!.nb = 1
+    try {
+      const get = (ip: string, cookie: string) => fetch(`${base}/mcp-server/v0/servers`, { headers: { ...PROXY, 'x-forwarded-for': ip, cookie } })
+      assert.equal((await get('198.51.100.20', 'id_token=alice')).status, 200)
+      assert.equal((await get('198.51.100.20', 'id_token=bob')).status, 200, 'another caller behind the same IP has its own budget')
+      assert.equal((await get('198.51.100.21', 'id_token=alice')).status, 429, 'the same caller from another IP shares its budget')
+    } finally { config.defaultLimits.apiRate!.nb = before }
+  })
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [ ] **Step 2: Run the test to verify it fails**
 
-Run: `npm test`
-Expected: FAIL — public mode lists `catalog` and `explore`; internal mode lists all 30 profiles.
+Run: `NODE_ENV=test node --test --test-force-exit --test-name-pattern="per identity" src/app.test.ts`
+Expected: FAIL — bob gets 429 (same IP bucket as alice).
 
 - [ ] **Step 3: Implement**
 
-`src/registry.ts`, add before `registryDocument`:
+`src/context.ts`, add before `requestContext`:
 
 ```ts
-/** Accepted for a release, never advertised: clients pick from the registry. */
-export const DEPRECATED_PROFILES = ['explore']
-/** What an internal registry offers: the catalog and the grid umbrellas — the cells stay selectable by name. */
+/** Who a caller is, as far as its credentials say: a hash of its cookie, else of its API key. */
+export function credentialIdentity (credentials: { cookie?: string | null, apiKey?: string | null }): string | undefined {
+  const secret = credentials.cookie || credentials.apiKey
+  return secret ? createHash('sha256').update(secret).digest('hex') : undefined
+}
+```
+
+and in `requestContext`, replace `const secret = cookie ?? apiKey` and the `identity:` line with `identity: credentialIdentity({ cookie, apiKey })`.
+
+`src/rate-limiting.ts`:
+- import `credentialIdentity` from `./context.ts`;
+- add:
+
+```ts
+/**
+ * The caller a request is counted against: its credential identity when it has one — so callers
+ * behind one IP keep their own budgets and a caller moving between IPs keeps one — its IP otherwise.
+ */
+const callerKey = (req: Request): string => {
+  const apiKey = req.headers['x-apikey'] ?? req.headers['x-api-key']
+  const identity = credentialIdentity({ cookie: req.headers.cookie, apiKey: Array.isArray(apiKey) ? apiKey[0] : apiKey })
+  return identity ? `identity:${identity}` : `ip:${reqIp(req)}`
+}
+```
+
+- in `consume`, replace `const ip = reqIp(req)` and every `rateLimiters[ip]` with `const key = callerKey(req)` and `rateLimiters[key]`;
+- in the middleware's debug line, log `callerKey(req)`;
+- update the top comment: load balancing has to hash on a stable caller attribute (the ingress hashes on the client address, which keeps an authenticated caller on one pod as long as its IP is stable).
+
+- [ ] **Step 4: Run the tests**
+
+Run: `npm run lint && npm run check-types && npm test`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/context.ts src/rate-limiting.ts src/app.test.ts
+git commit -m "feat(rate-limiting): count authenticated callers per identity, anonymous ones per IP"
+```
+
+---
+
+### Task 4: One registry
+
+**Files:**
+- Modify: `src/registry.ts`, `src/app.ts`
+- Test: `src/app.test.ts`
+
+**Interfaces:**
+- Produces: `REGISTRY_PROFILES = ['catalog', 'read', 'write', 'manage']` exported from `src/registry.ts`; `registryDocument` lists them in that order, only those the composer declares.
+
+- [ ] **Step 1: Write the failing test**
+
+Append inside `describe('app', …)`:
+
+```ts
+  it('lists catalog and the grid umbrellas in the registry, never explore', async () => {
+    const reg: any = await (await fetch(`${base}/mcp-server/v0/servers`, { headers: PROXY })).json()
+    assert.deepEqual(reg.servers.map((s: any) => s.server.name), ['fr.data-fair/catalog', 'fr.data-fair/read', 'fr.data-fair/write', 'fr.data-fair/manage'])
+    assert.equal(reg.servers[0].server.remotes[0].url, 'https://portal.test/mcp-server/mcp?profiles=catalog')
+  })
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `NODE_ENV=test node --test --test-force-exit --test-name-pattern="registry" src/app.test.ts`
+Expected: FAIL — every declared profile is listed (index order, `explore` included).
+
+- [ ] **Step 3: Implement**
+
+`src/registry.ts`, add:
+
+```ts
+/**
+ * What the registry offers: the catalog and the grid umbrellas. The cells stay selectable by name,
+ * and the deprecated explore is accepted but not advertised.
+ */
 export const REGISTRY_PROFILES = ['catalog', 'read', 'write', 'manage']
 ```
 
-and replace the `.filter(p => !profiles || profiles.includes(p.name))` chain start with an ordering by the given list:
+and replace the `.filter(p => !profiles || profiles.includes(p.name))` start of the chain with:
 
 ```ts
   const declared = new Map(composer.profiles().map(p => [p.name, p]))
-  const servers = profiles
+  const servers = REGISTRY_PROFILES
     .map(name => declared.get(name))
     .filter((p): p is NonNullable<typeof p> => !!p)
-    .map(p => ({
 ```
 
-(keep the existing `.map(p => ({ server: …, _meta: … }))` body), and make `profiles: string[]` required in the options type.
-
-`src/app.ts`, in the `/v0/servers` route, replace `profiles: config.mode === 'public' ? config.publicProfiles : undefined` with:
-
-```ts
-profiles: config.mode === 'public' ? config.publicProfiles.filter(p => !DEPRECATED_PROFILES.includes(p)) : REGISTRY_PROFILES
-```
-
-and import `DEPRECATED_PROFILES, REGISTRY_PROFILES` from `./registry.ts`.
+keeping the existing `.map(p => ({ server: …, _meta: … }))`; remove the `profiles` option from `registryDocument`'s parameters and its call in `src/app.ts`.
 
 - [ ] **Step 4: Run the tests**
 
@@ -328,27 +498,28 @@ Expected: PASS.
 
 ```bash
 git add src/registry.ts src/app.ts src/app.test.ts
-git commit -m "feat(registry): catalog in public mode, catalog and the grid umbrellas internally"
+git commit -m "feat(registry): catalog and the grid umbrellas, one list for every caller"
 ```
 
 ---
 
-### Task 4: Documentation
+### Task 5: Documentation
 
 **Files:**
 - Modify: `README.md`, `AGENTS.md`
 
-- [ ] **Step 1: Replace the profile vocabulary in the docs**
+- [ ] **Step 1: Update the docs**
 
-In `README.md` and `AGENTS.md`, replace every description of `explore` as the profile to compose with the new vocabulary:
-- the server composes the profiles of the deployment's index: `catalog` (what a portal publishes, the default and the only public profile), and internally the `read`/`write`/`manage` grid per resource family (see data-fair `docs/architecture/agent-profiles.md`);
-- `explore` is a deprecated alias of `catalog`, accepted for one release, never advertised in `/v0/servers`;
+In `README.md` and `AGENTS.md`:
+- one published server: remove every mention of `MODE`, public/internal deployments, `PUBLIC_PROFILES` and the profile gate (env table rows included); every declared profile is available, what a caller may do is data-fair's permissions; the agents service reaches the server like any other client;
+- profiles: `catalog` (what a portal publishes, the default) and the `read`/`write`/`manage` grid (data-fair `docs/architecture/agent-profiles.md`); `explore` is a deprecated alias of `catalog` for one release, never listed in `/v0/servers`;
 - `/datasets/mcp` serves data-fair's catalog tools under their pre-v2 names;
-- the env table: `PUBLIC_PROFILES` default `["catalog","explore"]`, `EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES` default `["catalog","explore"]`, `PROFILES` default `catalog`; examples use `catalog`;
-- `/v0/servers`: public mode lists `catalog`; internal mode lists `catalog`, `read`, `write`, `manage`.
-- the fixtures: `node scripts/refresh-fixtures.ts <data-fair checkout>` regenerates them when data-fair's document changes.
+- `/v0/servers` lists `catalog`, `read`, `write`, `manage`; `/status` is for in-cluster callers;
+- env defaults: `PROFILES` `catalog`, `EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES` `["catalog","explore"]`;
+- rate limiting: per caller identity (cookie or API key), per IP for anonymous callers, on every route; `IGNORE_RATE_LIMITING` is temporary — the plan to replace it is data-fair `docs/architecture/agent-rate-limiting.md`;
+- fixtures: `node scripts/refresh-fixtures.ts <data-fair checkout>` regenerates them when data-fair's document changes.
 
-Run: `grep -n "explore" README.md AGENTS.md`
+Run: `grep -n -i "explore\|MODE\|PUBLIC_PROFILES\|internal mode\|public mode" README.md AGENTS.md`
 Expected: every remaining occurrence describes the deprecated alias.
 
 - [ ] **Step 2: Gate and commit**
@@ -358,5 +529,5 @@ Expected: PASS.
 
 ```bash
 git add README.md AGENTS.md
-git commit -m "docs: the catalog profile and the profile vocabulary"
+git commit -m "docs: one published server, the profile vocabulary, per-caller rate limiting"
 ```
