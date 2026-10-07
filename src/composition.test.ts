@@ -18,6 +18,8 @@ describe('composition', () => {
     const ts = await composition.main(['explore'])
     assert.deepEqual(ts.tools.map(t => t.name), ['datafair_list_datasets', 'datafair_describe_dataset', 'datafair_search_data', 'datafair_get_field_values', 'datafair_aggregate_data', 'datafair_calculate_metric', 'geocode_address'])
     assert.deepEqual(ts.skills.map(s => s.id), ['data-fair/workflow'])
+    assert.equal(ts.skills[0].error, undefined, 'the linked workflow skill is served by the site')
+    assert.deepEqual(composition.composer.services.map(s => [s.id, s.status, s.warnings]), [['data-fair', 'ok', undefined]])
   })
   it('serves the alias with the seven names clients have', async () => {
     const ts = await composition.alias()
@@ -42,9 +44,10 @@ describe('composition', () => {
     assert.equal(res.isError, undefined)
     assert.match(res.text, /Seen by localhost:\d+/)
     assert.match(res.text, /cookie=id_token=abc/)
+    assert.ok(site.hits.some(h => h.url.startsWith('/data-fair/api/v1/catalog/datasets')), 'the catalog listing is the portal-scoped route')
   })
   it('refreshes: a changed document is picked up and reported', async () => {
-    site.setDoc(doc => { doc.paths['/datasets'].get['x-agent'].name = 'find_datasets' })
+    site.setDoc(doc => { doc.paths['/catalog/datasets'].get['x-agent'].name = 'find_datasets' })
     assert.equal(await composition.composer.refresh(), true)
     assert.ok((await composition.main(['explore'])).tools.some(t => t.name === 'datafair_find_datasets'))
     assert.ok(composition.lastRefresh() instanceof Date)

@@ -10,6 +10,8 @@ export interface FakeSite { origin: string, port: number, hits: { url: string, h
 
 export async function startFakeSite (): Promise<FakeSite> {
   let doc = JSON.parse(readFileSync(new URL('./fixtures/data-fair-api-docs.json', import.meta.url), 'utf8'))
+  const index = JSON.parse(readFileSync(new URL('./fixtures/data-fair-agents-index.json', import.meta.url), 'utf8'))
+  const FIXTURE_ORIGIN = 'http://fixture.test'
   let etag = 1
   const hits: FakeSite['hits'] = []
   let origin = ''
@@ -17,12 +19,23 @@ export async function startFakeSite (): Promise<FakeSite> {
     const url = new URL(req.url!, origin)
     hits.push({ url: req.url!, headers: req.headers as any })
     const json = (body: unknown, headers: Record<string, string> = {}) => { res.writeHead(200, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(body)) }
-    if (url.pathname === '/data-fair/api/v1/agents/index.json') return json({ version: 1, services: [{ id: 'data-fair', openapi: `${origin}/data-fair/api/v1/api-docs.json` }], profiles: { explore: { title: { en: 'Explore', fr: 'Explorer' }, description: { en: 'Read-only tools', fr: 'Outils en lecture seule' } } } }, { etag: '"index"' })
+    if (url.pathname === '/data-fair/api/v1/agents/index.json') {
+      // generated against a placeholder origin: the services point at this site
+      return json({ ...index, services: index.services.map((s: any) => ({ ...s, openapi: s.openapi.replace(FIXTURE_ORIGIN, origin) })) }, { etag: '"index"' })
+    }
+    const skill = url.pathname.match(/^\/data-fair\/api\/v1\/agents\/skills\/([a-z0-9-]+)\.md$/)
+    if (skill) {
+      try {
+        const body = readFileSync(new URL(`./fixtures/data-fair-skills/${skill[1]}.md`, import.meta.url), 'utf8')
+        res.writeHead(200, { 'content-type': 'text/markdown' }); return res.end(body)
+      } catch { res.writeHead(404); return res.end('unknown skill') }
+    }
     if (url.pathname === '/data-fair/api/v1/api-docs.json') {
       if (req.headers['if-none-match'] === `"${etag}"`) { res.writeHead(304); return res.end() }
       return json({ ...doc, servers: [{ url: `${origin}/data-fair/api/v1` }] }, { etag: `"${etag}"` })
     }
-    if (url.pathname === '/data-fair/api/v1/datasets') {
+    // the account listing and the catalog listing answer the same canned page
+    if (url.pathname === '/data-fair/api/v1/datasets' || url.pathname === '/data-fair/api/v1/catalog/datasets') {
       return json({ count: 1, results: [{ id: 'ds1', slug: 'ds1', title: `Seen by ${req.headers['x-forwarded-host'] ?? req.headers.host}`, summary: `cookie=${req.headers.cookie ?? ''} apikey=${req.headers['x-apikey'] ?? ''}`, count: 1, status: 'finalized', updatedAt: '2026-01-01T00:00:00Z', page: `${origin}/datasets/ds1` }] })
     }
     res.writeHead(404); res.end('not found ' + url.pathname)

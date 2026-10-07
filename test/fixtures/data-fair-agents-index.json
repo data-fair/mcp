@@ -1,0 +1,392 @@
+{
+  "version": 1,
+  "services": [
+    {
+      "id": "data-fair",
+      "openapi": "http://fixture.test/data-fair/api/v1/api-docs.json"
+    }
+  ],
+  "profiles": {
+    "catalog": {
+      "title": {
+        "fr": "Catalogue",
+        "en": "Catalog"
+      },
+      "description": {
+        "fr": "Les ressources publiées sur un portail, sous leur forme destinée aux utilisateurs finaux.",
+        "en": "The resources published on a portal, in their end-user form."
+      }
+    },
+    "read": {
+      "title": {
+        "fr": "Lire",
+        "en": "Read"
+      },
+      "description": {
+        "fr": "Consulter sans rien modifier.",
+        "en": "Look without changing anything."
+      },
+      "includes": [
+        "read_datasets",
+        "read_applications",
+        "read_portals",
+        "read_processings",
+        "read_catalogs",
+        "read_notifications",
+        "read_metrics",
+        "read_account"
+      ]
+    },
+    "write": {
+      "title": {
+        "fr": "Modifier",
+        "en": "Write"
+      },
+      "description": {
+        "fr": "Créer et modifier le contenu des ressources.",
+        "en": "Create and edit the content of resources."
+      },
+      "includes": [
+        "write_datasets",
+        "write_applications",
+        "write_portals",
+        "write_processings",
+        "write_catalogs",
+        "write_notifications",
+        "write_metrics",
+        "write_account"
+      ]
+    },
+    "manage": {
+      "title": {
+        "fr": "Administrer",
+        "en": "Manage"
+      },
+      "description": {
+        "fr": "Changer qui accède aux ressources, leur exposition et leur existence.",
+        "en": "Change who can access resources, whether they are exposed, and whether they exist."
+      },
+      "includes": [
+        "manage_datasets",
+        "manage_applications",
+        "manage_portals",
+        "manage_processings",
+        "manage_catalogs",
+        "manage_notifications",
+        "manage_metrics",
+        "manage_account"
+      ]
+    },
+    "read_datasets": {
+      "title": {
+        "fr": "Lire — jeux de données",
+        "en": "Read — datasets"
+      },
+      "description": {
+        "fr": "Consulter sans rien modifier. Périmètre : jeux de données.",
+        "en": "Look without changing anything. Scope: datasets."
+      }
+    },
+    "write_datasets": {
+      "title": {
+        "fr": "Modifier — jeux de données",
+        "en": "Write — datasets"
+      },
+      "description": {
+        "fr": "Créer et modifier le contenu des ressources. Périmètre : jeux de données.",
+        "en": "Create and edit the content of resources. Scope: datasets."
+      },
+      "includes": [
+        "read_datasets"
+      ]
+    },
+    "manage_datasets": {
+      "title": {
+        "fr": "Administrer — jeux de données",
+        "en": "Manage — datasets"
+      },
+      "description": {
+        "fr": "Changer qui accède aux ressources, leur exposition et leur existence. Périmètre : jeux de données.",
+        "en": "Change who can access resources, whether they are exposed, and whether they exist. Scope: datasets."
+      },
+      "includes": [
+        "write_datasets"
+      ]
+    },
+    "read_applications": {
+      "title": {
+        "fr": "Lire — applications",
+        "en": "Read — applications"
+      },
+      "description": {
+        "fr": "Consulter sans rien modifier. Périmètre : applications.",
+        "en": "Look without changing anything. Scope: applications."
+      }
+    },
+    "write_applications": {
+      "title": {
+        "fr": "Modifier — applications",
+        "en": "Write — applications"
+      },
+      "description": {
+        "fr": "Créer et modifier le contenu des ressources. Périmètre : applications.",
+        "en": "Create and edit the content of resources. Scope: applications."
+      },
+      "includes": [
+        "read_applications"
+      ]
+    },
+    "manage_applications": {
+      "title": {
+        "fr": "Administrer — applications",
+        "en": "Manage — applications"
+      },
+      "description": {
+        "fr": "Changer qui accède aux ressources, leur exposition et leur existence. Périmètre : applications.",
+        "en": "Change who can access resources, whether they are exposed, and whether they exist. Scope: applications."
+      },
+      "includes": [
+        "write_applications"
+      ]
+    },
+    "read_portals": {
+      "title": {
+        "fr": "Lire — portails",
+        "en": "Read — portals"
+      },
+      "description": {
+        "fr": "Consulter sans rien modifier. Périmètre : portails.",
+        "en": "Look without changing anything. Scope: portals."
+      }
+    },
+    "write_portals": {
+      "title": {
+        "fr": "Modifier — portails",
+        "en": "Write — portals"
+      },
+      "description": {
+        "fr": "Créer et modifier le contenu des ressources. Périmètre : portails.",
+        "en": "Create and edit the content of resources. Scope: portals."
+      },
+      "includes": [
+        "read_portals"
+      ]
+    },
+    "manage_portals": {
+      "title": {
+        "fr": "Administrer — portails",
+        "en": "Manage — portals"
+      },
+      "description": {
+        "fr": "Changer qui accède aux ressources, leur exposition et leur existence. Périmètre : portails.",
+        "en": "Change who can access resources, whether they are exposed, and whether they exist. Scope: portals."
+      },
+      "includes": [
+        "write_portals"
+      ]
+    },
+    "read_processings": {
+      "title": {
+        "fr": "Lire — traitements",
+        "en": "Read — processings"
+      },
+      "description": {
+        "fr": "Consulter sans rien modifier. Périmètre : traitements.",
+        "en": "Look without changing anything. Scope: processings."
+      }
+    },
+    "write_processings": {
+      "title": {
+        "fr": "Modifier — traitements",
+        "en": "Write — processings"
+      },
+      "description": {
+        "fr": "Créer et modifier le contenu des ressources. Périmètre : traitements.",
+        "en": "Create and edit the content of resources. Scope: processings."
+      },
+      "includes": [
+        "read_processings"
+      ]
+    },
+    "manage_processings": {
+      "title": {
+        "fr": "Administrer — traitements",
+        "en": "Manage — processings"
+      },
+      "description": {
+        "fr": "Changer qui accède aux ressources, leur exposition et leur existence. Périmètre : traitements.",
+        "en": "Change who can access resources, whether they are exposed, and whether they exist. Scope: processings."
+      },
+      "includes": [
+        "write_processings"
+      ]
+    },
+    "read_catalogs": {
+      "title": {
+        "fr": "Lire — catalogues",
+        "en": "Read — catalogs"
+      },
+      "description": {
+        "fr": "Consulter sans rien modifier. Périmètre : catalogues.",
+        "en": "Look without changing anything. Scope: catalogs."
+      }
+    },
+    "write_catalogs": {
+      "title": {
+        "fr": "Modifier — catalogues",
+        "en": "Write — catalogs"
+      },
+      "description": {
+        "fr": "Créer et modifier le contenu des ressources. Périmètre : catalogues.",
+        "en": "Create and edit the content of resources. Scope: catalogs."
+      },
+      "includes": [
+        "read_catalogs"
+      ]
+    },
+    "manage_catalogs": {
+      "title": {
+        "fr": "Administrer — catalogues",
+        "en": "Manage — catalogs"
+      },
+      "description": {
+        "fr": "Changer qui accède aux ressources, leur exposition et leur existence. Périmètre : catalogues.",
+        "en": "Change who can access resources, whether they are exposed, and whether they exist. Scope: catalogs."
+      },
+      "includes": [
+        "write_catalogs"
+      ]
+    },
+    "read_notifications": {
+      "title": {
+        "fr": "Lire — notifications",
+        "en": "Read — notifications"
+      },
+      "description": {
+        "fr": "Consulter sans rien modifier. Périmètre : notifications.",
+        "en": "Look without changing anything. Scope: notifications."
+      }
+    },
+    "write_notifications": {
+      "title": {
+        "fr": "Modifier — notifications",
+        "en": "Write — notifications"
+      },
+      "description": {
+        "fr": "Créer et modifier le contenu des ressources. Périmètre : notifications.",
+        "en": "Create and edit the content of resources. Scope: notifications."
+      },
+      "includes": [
+        "read_notifications"
+      ]
+    },
+    "manage_notifications": {
+      "title": {
+        "fr": "Administrer — notifications",
+        "en": "Manage — notifications"
+      },
+      "description": {
+        "fr": "Changer qui accède aux ressources, leur exposition et leur existence. Périmètre : notifications.",
+        "en": "Change who can access resources, whether they are exposed, and whether they exist. Scope: notifications."
+      },
+      "includes": [
+        "write_notifications"
+      ]
+    },
+    "read_metrics": {
+      "title": {
+        "fr": "Lire — métriques d'audience",
+        "en": "Read — audience metrics"
+      },
+      "description": {
+        "fr": "Consulter sans rien modifier. Périmètre : métriques d'audience.",
+        "en": "Look without changing anything. Scope: audience metrics."
+      }
+    },
+    "write_metrics": {
+      "title": {
+        "fr": "Modifier — métriques d'audience",
+        "en": "Write — audience metrics"
+      },
+      "description": {
+        "fr": "Créer et modifier le contenu des ressources. Périmètre : métriques d'audience.",
+        "en": "Create and edit the content of resources. Scope: audience metrics."
+      },
+      "includes": [
+        "read_metrics"
+      ]
+    },
+    "manage_metrics": {
+      "title": {
+        "fr": "Administrer — métriques d'audience",
+        "en": "Manage — audience metrics"
+      },
+      "description": {
+        "fr": "Changer qui accède aux ressources, leur exposition et leur existence. Périmètre : métriques d'audience.",
+        "en": "Change who can access resources, whether they are exposed, and whether they exist. Scope: audience metrics."
+      },
+      "includes": [
+        "write_metrics"
+      ]
+    },
+    "read_account": {
+      "title": {
+        "fr": "Lire — compte",
+        "en": "Read — account"
+      },
+      "description": {
+        "fr": "Consulter sans rien modifier. Périmètre : compte.",
+        "en": "Look without changing anything. Scope: account."
+      }
+    },
+    "write_account": {
+      "title": {
+        "fr": "Modifier — compte",
+        "en": "Write — account"
+      },
+      "description": {
+        "fr": "Créer et modifier le contenu des ressources. Périmètre : compte.",
+        "en": "Create and edit the content of resources. Scope: account."
+      },
+      "includes": [
+        "read_account"
+      ]
+    },
+    "manage_account": {
+      "title": {
+        "fr": "Administrer — compte",
+        "en": "Manage — account"
+      },
+      "description": {
+        "fr": "Changer qui accède aux ressources, leur exposition et leur existence. Périmètre : compte.",
+        "en": "Change who can access resources, whether they are exposed, and whether they exist. Scope: account."
+      },
+      "includes": [
+        "write_account"
+      ]
+    },
+    "platform": {
+      "title": {
+        "fr": "Plateforme",
+        "en": "Platform"
+      },
+      "description": {
+        "fr": "Opérations réservées aux super-administrateurs.",
+        "en": "Operations reserved to superadmins."
+      }
+    },
+    "explore": {
+      "title": {
+        "fr": "Explorer (obsolète)",
+        "en": "Explore (deprecated)"
+      },
+      "description": {
+        "fr": "Alias obsolète de catalog, retiré à la prochaine version.",
+        "en": "Deprecated alias of catalog, removed in the next release."
+      },
+      "includes": [
+        "catalog"
+      ]
+    }
+  }
+}
