@@ -53,8 +53,10 @@ service alike (parity: our own agents get no surface another agent cannot reach)
 profile is available to every caller; what a caller may actually do is data-fair's permissions
 on the identity it forwards (cookie or API key).
 
-Rate limiting is per caller on every route: by identity (a hash of the cookie or API key) when
-authenticated, by client IP otherwise. `IGNORE_RATE_LIMITING` is a temporary measure: it makes
+Rate limiting is per caller on every route, in-cluster callers included: by claimed identity (a
+hash of the `id_token` session cookie or of the API key) when there is one, by client IP otherwise —
+and always under a per-IP ceiling (10× the per-caller budget), since identities are not verified
+here. `IGNORE_RATE_LIMITING` is a temporary measure: it makes
 data-fair skip its own limits for relayed calls. The plan to replace it — the caller's IP and
 identity reaching data-fair and the ingress through a trusted forwarder — is data-fair's
 `docs/architecture/agent-rate-limiting.md`.

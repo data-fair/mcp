@@ -15,7 +15,7 @@ const cacheable = (res: Response) => res.set({ 'Cache-Control': 'public, max-age
 const headersOf = (req: Request) => new Headers(Object.entries(req.headers).flatMap(([k, v]) => v === undefined ? [] : [[k, Array.isArray(v) ? v.join(', ') : v] as [string, string]]))
 const siteOf = (req: Request) => originFromForwarded(headersOf(req)) ?? config.mainSiteUrl!
 /**
- * The one profile parser, used by both the gate and the handler so they can never disagree:
+ * The one profile parser, used by both the profile check and the handler so they can never disagree:
  * every occurrence of `profiles` (repeated params included), comma-split, trimmed, emptied
  * entries dropped; an empty result (absent, blank, or only separators/blanks) means the
  * default `catalog` set.
@@ -47,13 +47,21 @@ export function createApp (composition: Composition, dispatcher: SiteDispatcher)
     next()
   }
 
+  // An undeclared profile is the caller's mistake: a 400 naming it, not an error deep in the MCP handler.
+  const knownProfiles = (req: Request, res: Response, next: NextFunction) => {
+    const declared = new Set(composition.composer.profiles().map(p => p.name))
+    const unknown = profilesOf(new URL(req.url, 'http://x').searchParams).filter(p => !declared.has(p))
+    if (unknown.length) { res.status(400).type('text/plain').send(`unknown profile: ${unknown.join(', ')} (declared: ${[...declared].join(', ')})`); return }
+    next()
+  }
+
   const context = requestContext({ config, dispatcher })
   const options = { context, refreshMs: config.refreshInterval > 0 ? config.refreshInterval * 1000 : undefined }
   const main = createMcpHttpHandler((request) => composition.main(request ? profilesOf(new URL(request.url).searchParams) : ['catalog']), { name: 'datafair-mcp-server', version }, options)
   const alias = createMcpHttpHandler(() => composition.alias(), { name: 'datafair-datasets-mcp-server', version }, options)
   composition.composer.onChange(() => { for (const h of [main, alias]) { h.notify.toolsChanged(); h.notify.resourcesChanged() } })
 
-  app.all('/mcp', cors, ...limiter, toNodeHandler(main))
+  app.all('/mcp', cors, ...limiter, knownProfiles, toNodeHandler(main))
   app.all('/datasets/mcp', cors, ...limiter, toNodeHandler(alias))
 
   app.get('/v0/servers', ...limiter, (req, res) => {

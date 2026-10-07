@@ -116,4 +116,38 @@ describe('app', () => {
     assert.deepEqual(reg.servers.map((s: any) => s.server.name), ['fr.data-fair/catalog', 'fr.data-fair/read', 'fr.data-fair/write', 'fr.data-fair/manage'])
     assert.equal(reg.servers[0].server.remotes[0].url, 'https://portal.test/mcp-server/mcp?profiles=catalog')
   })
+  it('caps made-up identities from one IP under a per-IP ceiling', async () => {
+    const before = config.defaultLimits.apiRate!.nb
+    config.defaultLimits.apiRate!.nb = 1
+    try {
+      const statuses: number[] = []
+      for (let i = 0; i < 15; i++) {
+        statuses.push((await fetch(`${base}/mcp-server/v0/servers`, { headers: { ...PROXY, 'x-forwarded-for': '198.51.100.30', cookie: `id_token=junk${i}` } })).status)
+      }
+      assert.ok(statuses.includes(429), `a fresh cookie per request must not escape the limiter (${statuses.join(',')})`)
+    } finally { config.defaultLimits.apiRate!.nb = before }
+  })
+  it('keeps a user in one budget whatever their unrelated cookies', async () => {
+    const before = config.defaultLimits.apiRate!.nb
+    config.defaultLimits.apiRate!.nb = 1
+    try {
+      const get = (cookie: string) => fetch(`${base}/mcp-server/v0/servers`, { headers: { ...PROXY, 'x-forwarded-for': '198.51.100.31', cookie } })
+      assert.equal((await get('id_token=carol; consent=1')).status, 200)
+      assert.equal((await get('id_token=carol; consent=2')).status, 429)
+    } finally { config.defaultLimits.apiRate!.nb = before }
+  })
+  it('limits in-cluster callers too', async () => {
+    const before = config.defaultLimits.apiRate!.nb
+    config.defaultLimits.apiRate!.nb = 1
+    try {
+      const get = () => fetch(`${base}/v0/servers`, { headers: { cookie: 'id_token=dave' } })
+      assert.equal((await get()).status, 200)
+      assert.equal((await get()).status, 429)
+    } finally { config.defaultLimits.apiRate!.nb = before }
+  })
+  it('answers an undeclared profile with a 400 naming it', async () => {
+    const res = await fetch(`${base}/mcp-server/mcp?profiles=catalog,nope`, { method: 'POST', headers: { ...PROXY, 'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'c', version: '0' } } }) })
+    assert.equal(res.status, 400)
+    assert.match(await res.text(), /unknown profile: nope/)
+  })
 })

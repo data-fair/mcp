@@ -50,7 +50,8 @@ operations) is discovered through the main site's agent index and turned into MC
   in-cluster caller without forwarded headers keeps the main site
 - No mode, no profile gate: parity means our agents reach the server like any other client;
   data-fair's permissions on the forwarded identity are the boundary
-- Rate limiting is per caller (credential identity, else client IP) on every route;
+- Rate limiting is per caller (claimed identity: `id_token` cookie or API key, else client IP)
+  under a per-IP ceiling, on every route and for every caller, in-cluster included;
   `IGNORE_RATE_LIMITING` is temporary — data-fair `docs/architecture/agent-rate-limiting.md`
 - Test fixtures come from data-fair's generators: `node scripts/refresh-fixtures.ts <data-fair checkout>`
 - Tools are generated, not declared: to change a tool's name, description or schema,
