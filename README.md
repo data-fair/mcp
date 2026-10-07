@@ -29,6 +29,7 @@ clients (e.g., Claude Desktop, VS Code).
 - `PORTAL_URL` is **required** — set it to the base URL of the Data Fair portal you want to query.
 - `DATA_FAIR_API_KEY` — optional API key for authenticating requests to the Data Fair instance.
 - `PROFILES` — optional, comma-separated list of profiles to compose (default `catalog`).
+- `HTTPS_PROXY` — optional forward proxy every call tunnels through (e.g. an identity-injecting proxy such as `@data-fair/nhi-proxy`); a TLS-intercepting proxy's CA goes in `NODE_EXTRA_CA_CERTS`.
 
 ```json
 {
