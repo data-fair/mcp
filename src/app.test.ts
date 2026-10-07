@@ -101,4 +101,14 @@ describe('app', () => {
       assert.equal((await fetch(`${base}/mcp-server/v0/servers`, { headers: h })).status, 429)
     } finally { config.defaultLimits.apiRate!.nb = before }
   })
+  it('rate-limits authenticated callers per identity, not per IP', async () => {
+    const before = config.defaultLimits.apiRate!.nb
+    config.defaultLimits.apiRate!.nb = 1
+    try {
+      const get = (ip: string, cookie: string) => fetch(`${base}/mcp-server/v0/servers`, { headers: { ...PROXY, 'x-forwarded-for': ip, cookie } })
+      assert.equal((await get('198.51.100.20', 'id_token=alice')).status, 200)
+      assert.equal((await get('198.51.100.20', 'id_token=bob')).status, 200, 'another caller behind the same IP has its own budget')
+      assert.equal((await get('198.51.100.21', 'id_token=alice')).status, 429, 'the same caller from another IP shares its budget')
+    } finally { config.defaultLimits.apiRate!.nb = before }
+  })
 })

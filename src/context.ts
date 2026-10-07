@@ -24,6 +24,12 @@ export function originFromForwarded (headers: Headers): string | undefined {
   return `${proto}://${host}${explicit ? ':' + port : ''}`
 }
 
+/** Who a caller is, as far as its credentials say: a hash of its cookie, else of its API key. */
+export function credentialIdentity (credentials: { cookie?: string | null, apiKey?: string | null }): string | undefined {
+  const secret = credentials.cookie || credentials.apiKey
+  return secret ? createHash('sha256').update(secret).digest('hex') : undefined
+}
+
 export function requestContext (options: { config: Pick<ApiConfig, 'mainSiteUrl' | 'ignoreRateLimiting'>, dispatcher: SiteDispatcher }): (request: Request | undefined) => CallContext {
   const { config, dispatcher } = options
   return (request) => {
@@ -34,11 +40,10 @@ export function requestContext (options: { config: Pick<ApiConfig, 'mainSiteUrl'
     const apiKey = headers.get('x-apikey') ?? headers.get('x-api-key')
     if (cookie) forwarded.cookie = cookie
     if (apiKey) forwarded['x-apikey'] = apiKey
-    const secret = cookie ?? apiKey
     return {
       fetch: siteFetch(siteOrigin, { mainSiteUrl: config.mainSiteUrl!, dispatcher, ignoreRateLimiting: config.ignoreRateLimiting }),
       headers: Object.keys(forwarded).length ? forwarded : undefined,
-      identity: secret ? createHash('sha256').update(secret).digest('hex') : undefined
+      identity: credentialIdentity({ cookie, apiKey })
     }
   }
 }
