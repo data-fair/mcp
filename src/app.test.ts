@@ -111,4 +111,9 @@ describe('app', () => {
       assert.equal((await get('198.51.100.21', 'id_token=alice')).status, 429, 'the same caller from another IP shares its budget')
     } finally { config.defaultLimits.apiRate!.nb = before }
   })
+  it('lists catalog and the grid umbrellas in the registry, never explore', async () => {
+    const reg: any = await (await fetch(`${base}/mcp-server/v0/servers`, { headers: PROXY })).json()
+    assert.deepEqual(reg.servers.map((s: any) => s.server.name), ['fr.data-fair/catalog', 'fr.data-fair/read', 'fr.data-fair/write', 'fr.data-fair/manage'])
+    assert.equal(reg.servers[0].server.remotes[0].url, 'https://portal.test/mcp-server/mcp?profiles=catalog')
+  })
 })

@@ -58,7 +58,7 @@ export function createApp (composition: Composition, dispatcher: SiteDispatcher)
 
   app.get('/v0/servers', ...limiter, (req, res) => {
     cacheable(res)
-    res.json(registryDocument({ composer: composition.composer, siteOrigin: siteOf(req), version, locale: config.locale, profiles: undefined }))
+    res.json(registryDocument({ composer: composition.composer, siteOrigin: siteOf(req), version, locale: config.locale }))
   })
   app.get('/status', ...limiter, (req, res) => {
     assertReqInternal(req)

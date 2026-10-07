@@ -1,10 +1,18 @@
 /** The MCP Registry API listing (GET /v0/servers): one server per profile, for hosts with pickers. */
 import type { Composer } from '@data-fair/openapi-mcp'
 
-export function registryDocument (options: { composer: Composer, siteOrigin: string, version: string, profiles?: string[], locale: string }) {
-  const { composer, siteOrigin, version, profiles, locale } = options
-  const servers = composer.profiles()
-    .filter(p => !profiles || profiles.includes(p.name))
+/**
+ * What the registry offers: the catalog and the grid umbrellas. The cells stay selectable by name,
+ * and the deprecated explore is accepted but not advertised.
+ */
+export const REGISTRY_PROFILES = ['catalog', 'read', 'write', 'manage']
+
+export function registryDocument (options: { composer: Composer, siteOrigin: string, version: string, locale: string }) {
+  const { composer, siteOrigin, version, locale } = options
+  const declared = new Map(composer.profiles().map(p => [p.name, p]))
+  const servers = REGISTRY_PROFILES
+    .map(name => declared.get(name))
+    .filter((p): p is NonNullable<typeof p> => !!p)
     .map(p => ({
       server: {
         name: `fr.data-fair/${p.name}`,
