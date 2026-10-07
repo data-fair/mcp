@@ -3,7 +3,8 @@
 ## Project overview
 
 MCP (Model Context Protocol) server for the Data Fair ecosystem. It composes the deployment's
-`explore` tools — every service that publishes an annotated OpenAPI document (`x-agent`
+tools by profile (`catalog` by default, the `read`/`write`/`manage` grid, `explore` as a
+deprecated alias of `catalog`) — every service that publishes an annotated OpenAPI document (`x-agent`
 operations) is discovered through the main site's agent index and turned into MCP tools by
 `@data-fair/openapi-mcp` — plus `geocode_address`, the one hand-written tool. Two usage modes:
 
@@ -11,8 +12,9 @@ operations) is discovered through the main site's agent index and turned into MC
   instance. Requires `PORTAL_URL`. Supports `DATA_FAIR_API_KEY` for authentication and
   `PROFILES` to pick which profiles to compose. Tool names carry the `datafair_` prefix.
 - **Data Fair stack mode**: deployed as a web service alongside Data Fair (available on
-  `/mcp-server` on the same domain). Uses HTTP transport. `mode: public` (behind the ingress,
-  profile-gated, rate limited) or `mode: internal` (ClusterIP only, for the agents service).
+  `/mcp-server` on the same domain). Uses HTTP transport. One published deployment for every
+  caller, the agents service included: every declared profile, data-fair's permissions decide
+  what a caller may do, rate limited per caller identity (else IP).
   `/mcp-server/datasets/mcp` is a compatibility alias serving data-fair's seven pre-1.0 tool
   names unprefixed.
 
@@ -30,7 +32,7 @@ operations) is discovered through the main site's agent index and turned into MC
 - `index.ts` — entrypoint, picks transport (stdio vs HTTP)
 - `src/config.ts` — config loader (uses `config` package + generated types in `config/type/`)
 - `src/server.ts` — HTTP server setup
-- `src/app.ts` — Express app: routes, the profile gate, the per-route rate limiter
+- `src/app.ts` — Express app: routes and the per-route rate limiter
 - `src/composition.ts` — the one composer for the process, the composed set, the
   compatibility alias, extra tools, the refresh loop
 - `src/site-fetch.ts` — origin swap, dispatcher (DNS cache, optional in-cluster proxy hop)
@@ -46,9 +48,11 @@ operations) is discovered through the main site's agent index and turned into MC
   calls go varies per request, never the tool definitions
 - The request's origin is swapped into every upstream URL per call (`siteFetch`); an
   in-cluster caller without forwarded headers keeps the main site
-- `mode` is the boundary: `public` (ingress, profile gate, rate limiting) vs `internal`
-  (ClusterIP, no gate, no limiting) — never a header, since a header can be forged from
-  outside the cluster
+- No mode, no profile gate: parity means our agents reach the server like any other client;
+  data-fair's permissions on the forwarded identity are the boundary
+- Rate limiting is per caller (credential identity, else client IP) on every route;
+  `IGNORE_RATE_LIMITING` is temporary — data-fair `docs/architecture/agent-rate-limiting.md`
+- Test fixtures come from data-fair's generators: `node scripts/refresh-fixtures.ts <data-fair checkout>`
 - Tools are generated, not declared: to change a tool's name, description or schema,
   annotate the service's OpenAPI document (`x-agent`) — never edit a schema here
 - `geocode_address` is the one hand-written tool (IGN has no `x-agent` document); it is an
