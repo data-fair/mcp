@@ -364,16 +364,6 @@
       "includes": [
         "write_account"
       ]
-    },
-    "platform": {
-      "title": {
-        "fr": "Plateforme",
-        "en": "Platform"
-      },
-      "description": {
-        "fr": "Opérations réservées aux super-administrateurs.",
-        "en": "Operations reserved to superadmins."
-      }
     }
   }
 }
