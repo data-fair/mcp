@@ -19,13 +19,11 @@ module.exports = {
   },
   port: 'PORT',
   transport: 'TRANSPORT',
-  mode: 'MODE',
   mainSiteUrl: 'MAIN_SITE_URL',
   indexPath: 'INDEX_PATH',
   refreshInterval: 'REFRESH_INTERVAL',
   // JSON array or comma-separated list, both accepted (see normalizeProfileLists in
   // src/config.ts) — so __format: 'json' is left off here, the raw string reaches config.
-  publicProfiles: 'PUBLIC_PROFILES',
   upstreamProxyHost: 'UPSTREAM_PROXY_HOST',
   extraTools: {
     geocodeAddress: {

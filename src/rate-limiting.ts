@@ -24,8 +24,11 @@ setInterval(() => {
   }
 }, 20 * 60 * 1000).unref()
 
+/** The client address: the reverse proxy's X-Forwarded-For, else the socket (a misconfigured proxy must not turn into a 500). */
+const clientIp = (req: Request): string => req.headers['x-forwarded-for'] ? reqIp(req) : (req.socket.remoteAddress ?? 'unknown')
+
 const consume = (req: Request): boolean => {
-  const ip = reqIp(req)
+  const ip = clientIp(req)
   if (!rateLimiters[ip]) {
     const nb = config.defaultLimits.apiRate?.nb ?? 100
     const duration = config.defaultLimits.apiRate?.duration ?? 60
@@ -47,7 +50,7 @@ export const rateLimitingMiddleware = (req: Request, res: Response, next: NextFu
   // and reqIp would throw; it is also not who per-IP limiting is meant to constrain.
   if (reqIsInternal(req)) return next()
   if (!consume(req)) {
-    debug('rate limit exceeded for', reqIp(req))
+    debug('rate limit exceeded for', clientIp(req))
     res.status(429).type('text/plain').send('Rate limit exceeded')
     return
   }

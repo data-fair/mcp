@@ -9,7 +9,7 @@ describe('composition', () => {
   let composition: Composition
   before(async () => {
     site = await startFakeSite()
-    const config: any = { locale: 'en', indexPath: '/data-fair/api/v1/agents/index.json', refreshInterval: 0, extraTools: { geocodeAddress: { active: true, profiles: ['explore'] } } }
+    const config: any = { locale: 'en', indexPath: '/data-fair/api/v1/agents/index.json', refreshInterval: 0, extraTools: { geocodeAddress: { active: true, profiles: ['catalog', 'explore'] } } }
     composition = await createComposition({ config, dispatcher: createDispatcher({ mainSiteUrl: site.origin }), mainSiteUrl: site.origin })
   })
   after(async () => { composition.close(); await site.close() })
@@ -25,11 +25,22 @@ describe('composition', () => {
     const ts = await composition.alias()
     assert.deepEqual(ts.tools.map(t => t.name), ['list_datasets', 'describe_dataset', 'search_data', 'get_field_values', 'aggregate_data', 'calculate_metric', 'geocode_address'])
   })
+  it('composes the catalog set, which explore reaches through the index alias', async () => {
+    const catalog = await composition.main(['catalog'])
+    assert.deepEqual(catalog.tools.map(t => t.name), ['datafair_list_datasets', 'datafair_describe_dataset', 'datafair_search_data', 'datafair_get_field_values', 'datafair_aggregate_data', 'datafair_calculate_metric', 'geocode_address'])
+    assert.deepEqual((await composition.main(['explore'])).tools.map(t => t.name), catalog.tools.map(t => t.name))
+  })
+  it('composes the grid umbrellas with the account tools', async () => {
+    const names = (await composition.main(['manage'])).tools.map(t => t.name)
+    assert.ok(names.includes('datafair_list_account_datasets'))
+    assert.ok(names.includes('datafair_publish_dataset'))
+    assert.ok(!names.includes('geocode_address'), 'geocode_address joins catalog sets only')
+  })
   it('refuses a profile no service declares instead of serving an empty set', async () => {
     await assert.rejects(composition.main(['nope']), /unknown profile "nope"/)
   })
   it('leaves geocode_address out when the profiles do not intersect its list, or it is inactive', async () => {
-    const config: any = { locale: 'en', indexPath: '/data-fair/api/v1/agents/index.json', refreshInterval: 0, extraTools: { geocodeAddress: { active: false, profiles: ['explore'] } } }
+    const config: any = { locale: 'en', indexPath: '/data-fair/api/v1/agents/index.json', refreshInterval: 0, extraTools: { geocodeAddress: { active: false, profiles: ['catalog', 'explore'] } } }
     const other = await createComposition({ config, dispatcher: createDispatcher({ mainSiteUrl: site.origin }), mainSiteUrl: site.origin })
     try {
       assert.ok(!(await other.main(['explore'])).tools.some(t => t.name === 'geocode_address'))

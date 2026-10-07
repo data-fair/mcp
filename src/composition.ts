@@ -11,7 +11,7 @@ export interface Composition {
   composer: Composer
   /** the composed set for a request's profiles, extra tools joined */
   main (profiles: string[]): Promise<ToolSet>
-  /** data-fair's explore operations under their pre-v2 names, plus geocode_address */
+  /** data-fair's catalog operations under their pre-v2 names, plus geocode_address */
   alias (): Promise<ToolSet>
   lastRefresh (): Date | undefined
   close (): void
@@ -44,7 +44,7 @@ export async function createComposition (options: { config: Pick<ApiConfig, 'loc
       return withExtras((await composer.compose(profiles)).toolSet)
     },
     async alias () {
-      return withExtras((await composer.compose(['explore'], { services: ['data-fair'], namePrefix: '' })).toolSet)
+      return withExtras((await composer.compose(['catalog'], { services: ['data-fair'], namePrefix: '' })).toolSet)
     },
     lastRefresh: () => lastRefresh,
     close () { if (timer) clearInterval(timer) }

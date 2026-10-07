@@ -1,7 +1,7 @@
 /**
  * From the incoming MCP request to the context every tool call carries: which site the
  * caller came through, and who the caller is. Nothing here is trusted for authorization —
- * the mode decides what a request may ask for (app.ts); this only says where the upstream
+ * data-fair's permissions decide what a caller may do; this only says where the upstream
  * call goes and which identity data-fair will see.
  */
 import { createHash } from 'node:crypto'

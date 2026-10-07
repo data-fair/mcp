@@ -19,7 +19,6 @@ describe('server: createRuntime', () => {
 
   it('wires upstreamProxyHost into the dispatcher it builds: a tool call reaches the fake site through the proxy', async () => {
     Object.assign(config, {
-      mode: 'internal',
       mainSiteUrl: site.origin,
       portalUrl: undefined,
       refreshInterval: 0,
@@ -52,7 +51,6 @@ describe('server: createRuntime', () => {
 
   it('resolves mainSiteUrl from portalUrl when unset, and the registry uses the portal origin', async () => {
     Object.assign(config, {
-      mode: 'internal',
       mainSiteUrl: undefined,
       portalUrl: site.origin,
       refreshInterval: 0,

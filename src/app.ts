@@ -18,12 +18,12 @@ const siteOf = (req: Request) => originFromForwarded(headersOf(req)) ?? config.m
  * The one profile parser, used by both the gate and the handler so they can never disagree:
  * every occurrence of `profiles` (repeated params included), comma-split, trimmed, emptied
  * entries dropped; an empty result (absent, blank, or only separators/blanks) means the
- * default `explore` set — never "no profiles asked, so nothing to refuse".
+ * default `catalog` set.
  */
 const profilesOf = (search: URLSearchParams): string[] => {
   const raw = search.getAll('profiles').join(',')
   const list = raw.split(',').map(s => s.trim()).filter(Boolean)
-  return list.length ? list : ['explore']
+  return list.length ? list : ['catalog']
 }
 
 export function createApp (composition: Composition, dispatcher: SiteDispatcher) {
@@ -33,10 +33,9 @@ export function createApp (composition: Composition, dispatcher: SiteDispatcher)
 
   app.use(createSiteMiddleware('mcp-server'))
 
-  // R3: the limiter is applied per route, after the profile gate, in public mode only.
-  // A refused profile must answer 403 before reqIp can throw on a request lacking
-  // X-Forwarded-For; in internal mode reqIp would throw unconditionally (no reverse proxy).
-  const limiter = config.mode === 'public' ? [rateLimitingMiddleware] : []
+  // One published server (parity: our agents reach it like any other client), limited per
+  // caller on every route; see data-fair docs/architecture/agent-rate-limiting.md.
+  const limiter = [rateLimitingMiddleware]
 
   // CORS for browser-based MCP clients, on the MCP routes only.
   const cors = (req: Request, res: Response, next: NextFunction) => {
@@ -48,31 +47,22 @@ export function createApp (composition: Composition, dispatcher: SiteDispatcher)
     next()
   }
 
-  // The gate: in public mode a request may only ask for public profiles. No header opens more.
-  const profileGate = (req: Request, res: Response, next: NextFunction) => {
-    if (config.mode !== 'public') return next()
-    const asked = profilesOf(new URL(req.url, 'http://x').searchParams)
-    const refused = asked.filter(p => !config.publicProfiles.includes(p))
-    if (refused.length) { res.status(403).type('text/plain').send(`profile not available here: ${refused.join(', ')}`); return }
-    next()
-  }
-
   const context = requestContext({ config, dispatcher })
   const options = { context, refreshMs: config.refreshInterval > 0 ? config.refreshInterval * 1000 : undefined }
-  const main = createMcpHttpHandler((request) => composition.main(request ? profilesOf(new URL(request.url).searchParams) : ['explore']), { name: 'datafair-mcp-server', version }, options)
+  const main = createMcpHttpHandler((request) => composition.main(request ? profilesOf(new URL(request.url).searchParams) : ['catalog']), { name: 'datafair-mcp-server', version }, options)
   const alias = createMcpHttpHandler(() => composition.alias(), { name: 'datafair-datasets-mcp-server', version }, options)
   composition.composer.onChange(() => { for (const h of [main, alias]) { h.notify.toolsChanged(); h.notify.resourcesChanged() } })
 
-  app.all('/mcp', cors, profileGate, ...limiter, toNodeHandler(main))
+  app.all('/mcp', cors, ...limiter, toNodeHandler(main))
   app.all('/datasets/mcp', cors, ...limiter, toNodeHandler(alias))
 
   app.get('/v0/servers', ...limiter, (req, res) => {
     cacheable(res)
-    res.json(registryDocument({ composer: composition.composer, siteOrigin: siteOf(req), version, locale: config.locale, profiles: config.mode === 'public' ? config.publicProfiles : undefined }))
+    res.json(registryDocument({ composer: composition.composer, siteOrigin: siteOf(req), version, locale: config.locale, profiles: undefined }))
   })
   app.get('/status', ...limiter, (req, res) => {
-    if (config.mode === 'public') assertReqInternal(req)
-    res.json({ mode: config.mode, mainSiteUrl: config.mainSiteUrl, services: composition.composer.services, profiles: composition.composer.profiles().map(p => p.name), lastRefresh: composition.lastRefresh(), extraTools: config.extraTools })
+    assertReqInternal(req)
+    res.json({ mainSiteUrl: config.mainSiteUrl, services: composition.composer.services, profiles: composition.composer.profiles().map(p => p.name), lastRefresh: composition.lastRefresh(), extraTools: config.extraTools })
   })
 
   app.use(errorHandler)

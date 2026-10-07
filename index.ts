@@ -29,7 +29,7 @@ if (config.transport === 'http') {
   // stdio sends no rate-limit bypass secret to the site it composes over (spec §4): a
   // deployment sharing config.ignoreRateLimiting with a stack sibling must not leak it here.
   const composition = await createComposition({ config: { ...config, ignoreRateLimiting: undefined }, dispatcher, mainSiteUrl })
-  const profiles = (process.env.PROFILES ?? 'explore').split(',').map(s => s.trim()).filter(Boolean)
+  const profiles = (process.env.PROFILES ?? 'catalog').split(',').map(s => s.trim()).filter(Boolean)
   const { siteFetch } = await import('./src/site-fetch.ts')
   const headers = config.dataFairAPIKey ? { 'x-apikey': config.dataFairAPIKey } : undefined
   const context = () => ({ fetch: siteFetch(mainSiteUrl, { mainSiteUrl, dispatcher }), headers })

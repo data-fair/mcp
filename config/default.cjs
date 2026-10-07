@@ -15,13 +15,11 @@ module.exports = {
   },
   port: 8080,
   transport: 'stdio',
-  mode: 'public',
   mainSiteUrl: undefined,
   indexPath: '/data-fair/api/v1/agents/index.json',
   refreshInterval: 300,
-  publicProfiles: ['explore'],
   upstreamProxyHost: undefined,
   extraTools: {
-    geocodeAddress: { active: true, profiles: ['explore'] }
+    geocodeAddress: { active: true, profiles: ['catalog', 'explore'] }
   }
 }
