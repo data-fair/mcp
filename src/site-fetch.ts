@@ -6,7 +6,7 @@
  * and the L1 proxy while looking, to that nginx, exactly like a proxied request.
  */
 import dns from 'node:dns'
-import { Agent, interceptors, type Dispatcher } from 'undici'
+import { Agent, ProxyAgent, interceptors, type Dispatcher } from 'undici'
 
 export interface SiteFetchOptions {
   /** origin the composed tools carry in their URLs */
@@ -33,8 +33,17 @@ export const proxyTarget = (spec: string): { host: string, port: number } => {
   return { host: spec.slice(0, i), port: Number(spec.slice(i + 1)) }
 }
 
-export function createDispatcher (options: { mainSiteUrl: string, upstreamProxyHost?: string, timeoutMs?: number }): SiteDispatcher {
+/**
+ * forwardProxy: an HTTP(S) forward proxy every call tunnels through (a local stdio server
+ * behind nhi-proxy, for instance). The proxy resolves names itself, so no DNS interceptor:
+ * pinning an address here would make the tunnel target an IP the proxy cannot match to a host.
+ */
+export function createDispatcher (options: { mainSiteUrl: string, upstreamProxyHost?: string, forwardProxy?: string, timeoutMs?: number }): SiteDispatcher {
   const timeout = options.timeoutMs ?? 30_000
+  if (options.forwardProxy) {
+    if (options.upstreamProxyHost) throw new Error('forwardProxy and upstreamProxyHost are exclusive')
+    return { dispatcher: new ProxyAgent({ uri: options.forwardProxy, connections: 8, headersTimeout: timeout, bodyTimeout: timeout }) }
+  }
   const proxy = options.upstreamProxyHost ? proxyTarget(options.upstreamProxyHost) : undefined
 
   // installed undici (^7.29) accepts a `lookup` on the dns interceptor, but its real

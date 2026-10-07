@@ -25,7 +25,9 @@ if (config.transport === 'http') {
   const { createComposition } = await import('./src/composition.ts')
   const mainSiteUrl = config.mainSiteUrl ?? config.portalUrl
   if (!mainSiteUrl) { console.error('PORTAL_URL (or MAIN_SITE_URL) is required in stdio mode'); process.exit(1) }
-  const dispatcher = createDispatcher({ mainSiteUrl, timeoutMs: 30_000 })
+  // a local server may sit behind a forward proxy (nhi-proxy…); its CA comes through NODE_EXTRA_CA_CERTS
+  const forwardProxy = process.env.HTTPS_PROXY ?? process.env.https_proxy ?? process.env.HTTP_PROXY ?? process.env.http_proxy
+  const dispatcher = createDispatcher({ mainSiteUrl, forwardProxy: forwardProxy || undefined, timeoutMs: 30_000 })
   // stdio sends no rate-limit bypass secret to the site it composes over (spec §4): a
   // deployment sharing config.ignoreRateLimiting with a stack sibling must not leak it here.
   const composition = await createComposition({ config: { ...config, ignoreRateLimiting: undefined }, dispatcher, mainSiteUrl })

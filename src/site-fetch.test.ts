@@ -1,6 +1,7 @@
 import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer, type Server } from 'node:http'
+import { connect } from 'node:net'
 import { createDispatcher, siteFetch, proxyTarget } from './site-fetch.ts'
 
 /** Echoes what reached it: host, path, and the headers the server is expected to set. */
@@ -80,5 +81,36 @@ describe('siteFetch', () => {
     const body: any = await (await f(`${main}/data-fair/api/v1/ping`)).json()
     assert.equal(body.headers['x-forwarded-host'], 'portal.test')
     assert.equal(body.host, `portal.test:${port}`)
+  })
+
+  it('tunnels every call through a forward proxy, the site host kept as the CONNECT target', async () => {
+    const connects: string[] = []
+    const proxy = createServer()
+    proxy.on('connect', (req, client, head) => {
+      connects.push(req.url!)
+      const upstreamSocket = connect(port, '127.0.0.1', () => {
+        client.write('HTTP/1.1 200 Connection Established\r\n\r\n')
+        upstreamSocket.write(head)
+        upstreamSocket.pipe(client)
+        client.pipe(upstreamSocket)
+      })
+    })
+    const proxyPort = await listen(proxy)
+    try {
+      const main = `http://main.test:${port}`
+      const dispatcher = createDispatcher({ mainSiteUrl: main, forwardProxy: `http://127.0.0.1:${proxyPort}` })
+      const f = siteFetch(main, { mainSiteUrl: main, dispatcher })
+      const body: any = await (await f(new Request(`${main}/data-fair/api/v1/ping`, { headers: { 'x-apikey': 'k' } }))).json()
+      assert.deepEqual(connects, [`main.test:${port}`])
+      assert.equal(body.host, `main.test:${port}`)
+      assert.equal(body.headers['x-apikey'], 'k')
+      await dispatcher.dispatcher.close()
+    } finally {
+      proxy.close()
+    }
+  })
+
+  it('refuses a forward proxy together with an upstream proxy host', () => {
+    assert.throws(() => createDispatcher({ mainSiteUrl: 'https://main.test', upstreamProxyHost: 'nginx', forwardProxy: 'http://127.0.0.1:1' }))
   })
 })
