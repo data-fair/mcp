@@ -3,8 +3,7 @@
 ## Project overview
 
 MCP (Model Context Protocol) server for the Data Fair ecosystem. It composes the deployment's
-tools by profile (`catalog` by default, the `read`/`write`/`manage` grid, `explore` as a
-deprecated alias of `catalog`) — every service that publishes an annotated OpenAPI document (`x-agent`
+tools by profile (`catalog` by default, the `read`/`write`/`manage` grid) — every service that publishes an annotated OpenAPI document (`x-agent`
 operations) is discovered through the main site's agent index and turned into MCP tools by
 `@data-fair/openapi-mcp` — plus `geocode_address`, the one hand-written tool. Two usage modes:
 

@@ -94,7 +94,7 @@
           "required": ["active", "profiles"],
           "properties": {
             "active": { "type": "boolean", "default": true },
-            "profiles": { "type": "array", "items": { "type": "string" }, "default": ["catalog", "explore"], "description": "The tool joins the set when the request's profiles intersect this list." }
+            "profiles": { "type": "array", "items": { "type": "string" }, "default": ["catalog"], "description": "The tool joins the set when the request's profiles intersect this list." }
           }
         }
       }

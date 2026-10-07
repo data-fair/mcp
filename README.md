@@ -13,7 +13,6 @@ annotated OpenAPI document (`x-agent` operations) is discovered through
 - the `read` / `write` / `manage` grid per resource family (`read_datasets`, `write_portals`…),
   with the umbrellas `read`, `write`, `manage` — see data-fair's
   `docs/architecture/agent-profiles.md`;
-- `explore` — deprecated alias of `catalog`, accepted for one release and never advertised.
 
 It also serves `geocode_address` (an IGN geocoder, the one hand-written tool — no service
 document describes it; it joins `catalog` sets) and a compatibility route,
@@ -85,7 +84,7 @@ Routes:
 | `REFRESH_INTERVAL`    | Seconds between conditional re-fetches of the index and documents; `0` disables.                                                                                         | `300`   | stack only         |
 | `UPSTREAM_PROXY_HOST` | Optional in-cluster reverse proxy (`host` or `host:port`, or a bracketed IPv6 literal such as `[::1]:8080`) every site host resolves to, skipping public DNS and the outer proxy hop. | —       | stack only         |
 | `EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE` | JSON boolean; whether `geocode_address` is composed at all, e.g. `EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE=false`.                                             | `true`  | standalone/stack   |
-| `EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES` | The profiles `geocode_address` joins, as a JSON array or a comma-separated list, e.g. `'["catalog"]'` or `catalog`. | `["catalog","explore"]` | standalone/stack |
+| `EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES` | The profiles `geocode_address` joins, as a JSON array or a comma-separated list, e.g. `'["catalog"]'` or `catalog`. | `["catalog"]` | standalone/stack |
 | `PROFILES`            | Comma-separated list of profiles to compose.                                                                                                                             | `catalog` | standalone       |
 
 ## Compatibility

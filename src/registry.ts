@@ -2,8 +2,7 @@
 import type { Composer } from '@data-fair/openapi-mcp'
 
 /**
- * What the registry offers: the catalog and the grid umbrellas. The cells stay selectable by name,
- * and the deprecated explore is accepted but not advertised.
+ * What the registry offers: the catalog and the grid umbrellas. The cells stay selectable by name.
  */
 export const REGISTRY_PROFILES = ['catalog', 'read', 'write', 'manage']
 

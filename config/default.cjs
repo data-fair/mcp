@@ -20,6 +20,6 @@ module.exports = {
   refreshInterval: 300,
   upstreamProxyHost: undefined,
   extraTools: {
-    geocodeAddress: { active: true, profiles: ['catalog', 'explore'] }
+    geocodeAddress: { active: true, profiles: ['catalog'] }
   }
 }

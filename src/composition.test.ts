@@ -9,13 +9,13 @@ describe('composition', () => {
   let composition: Composition
   before(async () => {
     site = await startFakeSite()
-    const config: any = { locale: 'en', indexPath: '/data-fair/api/v1/agents/index.json', refreshInterval: 0, extraTools: { geocodeAddress: { active: true, profiles: ['catalog', 'explore'] } } }
+    const config: any = { locale: 'en', indexPath: '/data-fair/api/v1/agents/index.json', refreshInterval: 0, extraTools: { geocodeAddress: { active: true, profiles: ['catalog'] } } }
     composition = await createComposition({ config, dispatcher: createDispatcher({ mainSiteUrl: site.origin }), mainSiteUrl: site.origin })
   })
   after(async () => { composition.close(); await site.close() })
 
-  it('composes the explore set with prefixes plus geocode_address', async () => {
-    const ts = await composition.main(['explore'])
+  it('composes the catalog set with prefixes plus geocode_address', async () => {
+    const ts = await composition.main(['catalog'])
     assert.deepEqual(ts.tools.map(t => t.name), ['datafair_list_datasets', 'datafair_describe_dataset', 'datafair_search_data', 'datafair_get_field_values', 'datafair_aggregate_data', 'datafair_calculate_metric', 'geocode_address'])
     assert.deepEqual(ts.skills.map(s => s.id), ['data-fair/workflow'])
     assert.equal(ts.skills[0].error, undefined, 'the linked workflow skill is served by the site')
@@ -24,11 +24,6 @@ describe('composition', () => {
   it('serves the alias with the seven names clients have', async () => {
     const ts = await composition.alias()
     assert.deepEqual(ts.tools.map(t => t.name), ['list_datasets', 'describe_dataset', 'search_data', 'get_field_values', 'aggregate_data', 'calculate_metric', 'geocode_address'])
-  })
-  it('composes the catalog set, which explore reaches through the index alias', async () => {
-    const catalog = await composition.main(['catalog'])
-    assert.deepEqual(catalog.tools.map(t => t.name), ['datafair_list_datasets', 'datafair_describe_dataset', 'datafair_search_data', 'datafair_get_field_values', 'datafair_aggregate_data', 'datafair_calculate_metric', 'geocode_address'])
-    assert.deepEqual((await composition.main(['explore'])).tools.map(t => t.name), catalog.tools.map(t => t.name))
   })
   it('composes the grid umbrellas with the account tools', async () => {
     const names = (await composition.main(['manage'])).tools.map(t => t.name)
@@ -40,14 +35,14 @@ describe('composition', () => {
     await assert.rejects(composition.main(['nope']), /unknown profile "nope"/)
   })
   it('leaves geocode_address out when the profiles do not intersect its list, or it is inactive', async () => {
-    const config: any = { locale: 'en', indexPath: '/data-fair/api/v1/agents/index.json', refreshInterval: 0, extraTools: { geocodeAddress: { active: false, profiles: ['catalog', 'explore'] } } }
+    const config: any = { locale: 'en', indexPath: '/data-fair/api/v1/agents/index.json', refreshInterval: 0, extraTools: { geocodeAddress: { active: false, profiles: ['catalog'] } } }
     const other = await createComposition({ config, dispatcher: createDispatcher({ mainSiteUrl: site.origin }), mainSiteUrl: site.origin })
     try {
-      assert.ok(!(await other.main(['explore'])).tools.some(t => t.name === 'geocode_address'))
+      assert.ok(!(await other.main(['catalog'])).tools.some(t => t.name === 'geocode_address'))
     } finally { other.close() }
   })
   it('executes through the caller context: the site origin and identity reach the API', async () => {
-    const ts = await composition.main(['explore'])
+    const ts = await composition.main(['catalog'])
     const tool = ts.tools.find(t => t.name === 'datafair_list_datasets')!
     const { siteFetch } = await import('./site-fetch.ts')
     const dispatcher = createDispatcher({ mainSiteUrl: site.origin })
@@ -60,7 +55,7 @@ describe('composition', () => {
   it('refreshes: a changed document is picked up and reported', async () => {
     site.setDoc(doc => { doc.paths['/catalog/datasets'].get['x-agent'].name = 'find_datasets' })
     assert.equal(await composition.composer.refresh(), true)
-    assert.ok((await composition.main(['explore'])).tools.some(t => t.name === 'datafair_find_datasets'))
+    assert.ok((await composition.main(['catalog'])).tools.some(t => t.name === 'datafair_find_datasets'))
     assert.ok(composition.lastRefresh() instanceof Date)
   })
 })

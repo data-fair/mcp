@@ -45,8 +45,9 @@ describe('app', () => {
     assert.equal(hit.headers['x-forwarded-host'], 'portal.test')
     await client.close()
   })
-  it('serves explore to clients still configured with it', async () => {
-    assert.deepEqual(await names('/mcp-server/mcp?profiles=explore'), await names('/mcp-server/mcp?profiles=catalog'))
+  it('refuses explore, which never shipped: catalog is the exploration profile', async () => {
+    const res = await fetch(`${base}/mcp-server/mcp?profiles=explore`, { method: 'POST', headers: { ...PROXY, 'content-type': 'application/json' }, body: '{}' })
+    assert.equal(res.status, 400)
   })
   it('serves the grid to any caller: what it may do is data-fair permissions on its identity', async () => {
     const tools = await names('/mcp-server/mcp?profiles=read')
@@ -111,7 +112,7 @@ describe('app', () => {
       assert.equal((await get('198.51.100.21', 'id_token=alice')).status, 429, 'the same caller from another IP shares its budget')
     } finally { config.defaultLimits.apiRate!.nb = before }
   })
-  it('lists catalog and the grid umbrellas in the registry, never explore', async () => {
+  it('lists catalog and the grid umbrellas in the registry', async () => {
     const reg: any = await (await fetch(`${base}/mcp-server/v0/servers`, { headers: PROXY })).json()
     assert.deepEqual(reg.servers.map((s: any) => s.server.name), ['fr.data-fair/catalog', 'fr.data-fair/read', 'fr.data-fair/write', 'fr.data-fair/manage'])
     assert.equal(reg.servers[0].server.remotes[0].url, 'https://portal.test/mcp-server/mcp?profiles=catalog')

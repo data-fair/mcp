@@ -5,8 +5,8 @@ import config from 'config'
 export type { ApiConfig } from '../config/type/index.ts'
 
 /**
- * EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES accepts either a JSON array (`'["catalog","explore"]'`)
- * or a comma-separated list (`'catalog,explore'`). custom-environment-variables.cjs drops
+ * EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES accepts either a JSON array (`'["catalog","read"]'`)
+ * or a comma-separated list (`'catalog,read'`). custom-environment-variables.cjs drops
  * `__format: 'json'` for this key so a plain string reaches here unparsed; this runs before
  * assertValid so the schema (which requires an array) always sees one.
  */

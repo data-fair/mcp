@@ -12,7 +12,7 @@ describe('config', () => {
     assert.equal((config as any).mode, undefined, 'one published server: no mode')
     assert.equal((config as any).publicProfiles, undefined)
     assert.equal(config.upstreamProxyHost, undefined)
-    assert.deepEqual(config.extraTools, { geocodeAddress: { active: true, profiles: ['catalog', 'explore'] } })
+    assert.deepEqual(config.extraTools, { geocodeAddress: { active: true, profiles: ['catalog'] } })
     assert.equal(config.observer.port, 9090)
   })
 
@@ -22,8 +22,8 @@ describe('config', () => {
       assert.deepEqual(config.extraTools!.geocodeAddress!.profiles, ['catalog'])
     })
     it('splits a comma-separated string, trims, and drops empty entries', () => {
-      const config = normalizeProfileLists({ extraTools: { geocodeAddress: { profiles: ' catalog, explore ,,' } } })
-      assert.deepEqual(config.extraTools!.geocodeAddress!.profiles, ['catalog', 'explore'])
+      const config = normalizeProfileLists({ extraTools: { geocodeAddress: { profiles: ' catalog, read ,,' } } })
+      assert.deepEqual(config.extraTools!.geocodeAddress!.profiles, ['catalog', 'read'])
     })
     it('leaves an already-array value untouched', () => {
       const config = normalizeProfileLists({ extraTools: { geocodeAddress: { profiles: ['catalog'] } } })

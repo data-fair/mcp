@@ -1692,6 +1692,12 @@
                                 "properties": {
                                   "key": {
                                     "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "x-refersTo": {
+                                    "type": "string"
                                   }
                                 },
                                 "layout": {
@@ -3793,6 +3799,12 @@
                                     "properties": {
                                       "key": {
                                         "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "x-refersTo": {
+                                        "type": "string"
                                       }
                                     },
                                     "layout": {
@@ -5326,6 +5338,12 @@
                                     ],
                                     "properties": {
                                       "key": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "x-refersTo": {
                                         "type": "string"
                                       }
                                     },
@@ -7099,6 +7117,12 @@
                                     ],
                                     "properties": {
                                       "key": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "x-refersTo": {
                                         "type": "string"
                                       }
                                     },
@@ -11929,6 +11953,12 @@
                                             ],
                                             "properties": {
                                               "key": {
+                                                "type": "string"
+                                              },
+                                              "title": {
+                                                "type": "string"
+                                              },
+                                              "x-refersTo": {
                                                 "type": "string"
                                               }
                                             },
