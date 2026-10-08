@@ -1,6 +1,9 @@
-# <img alt="Data FAIR logo" src="https://cdn.jsdelivr.net/gh/data-fair/data-fair@master/ui/public/assets/logo.svg" width="25"> @data-fair/mcp ![GitHub License](https://img.shields.io/github/license/data-fair/mcp) ![GitHub package.json version](https://img.shields.io/github/package-json/v/data-fair/mcp)
+# <img alt="Data FAIR logo" src="https://cdn.jsdelivr.net/gh/data-fair/data-fair@master/ui/src/assets/logo.svg" width="40"> @data-fair/mcp
 
-A Model Context Protocol (MCP) server to interact with the Data Fair ecosystem.
+![GitHub License](https://img.shields.io/github/license/data-fair/mcp) ![GitHub package.json version](https://img.shields.io/github/package-json/v/data-fair/mcp)  
+*A Model Context Protocol (MCP) server to interact with the Data Fair ecosystem.*
+
+Part of the [Data Fair](https://datafair.cloud) ecosystem.
 
 ## Usage modes
 
@@ -46,6 +49,17 @@ Example endpoint: `https://opendata.koumoul.com/mcp-server/datasets/mcp`
 | `PORT`                | Port for the HTTP server to listen on.                                                                                                                                   | `8080`  | stack only         |
 | `OBSERVER_ACTIVE`     | Enable Prometheus metrics.                                                                                                                                               | `true`  | stack only         |
 | `OBSERVER_PORT`       | Port for the Prometheus metrics observer.                                                                                                                                | `9090`  | stack only         |
+
+## Sponsors
+
+<a href="https://koumoul.com"><img alt="Koumoul logo" src="https://cdn.jsdelivr.net/gh/data-fair/data-fair@master/docs/assets/koumoul-logo.png" height="56" align="left"></a>
+
+**[Koumoul](https://koumoul.com)** · *La donnée accessible*<br>
+Koumoul develops the Data Fair ecosystem and hosts it as an online service.
+
+<br clear="left">
+
+Click [here to support the development of this project](https://github.com/sponsors/koumoul-dev).
 
 ## 🔨 Development
 
