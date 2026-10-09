@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "datafair": {
+      "command": "./run-mcp.sh"
+    }
+  }
+}

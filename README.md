@@ -1,6 +1,9 @@
-# <img alt="Data FAIR logo" src="https://cdn.jsdelivr.net/gh/data-fair/data-fair@master/ui/public/assets/logo.svg" width="25"> @data-fair/mcp ![GitHub License](https://img.shields.io/github/license/data-fair/mcp) ![GitHub package.json version](https://img.shields.io/github/package-json/v/data-fair/mcp)
+# <img alt="Data FAIR logo" src="https://cdn.jsdelivr.net/gh/data-fair/data-fair@master/ui/src/assets/logo.svg" width="40"> @data-fair/mcp
 
-A Model Context Protocol (MCP) server to interact with the Data Fair ecosystem.
+![GitHub License](https://img.shields.io/github/license/data-fair/mcp) ![GitHub package.json version](https://img.shields.io/github/package-json/v/data-fair/mcp)  
+*A Model Context Protocol (MCP) server to interact with the Data Fair ecosystem.*
+
+Part of the [Data Fair](https://datafair.cloud) ecosystem.
 
 ## What it serves
 
@@ -97,6 +100,17 @@ Routes:
 services' OpenAPI documents and are read per session, so they may differ from what a 0.x
 client remembers. HTTP+SSE (`/sse`, `/messages`) is removed; only Streamable HTTP is served.
 
-## Development
+## Sponsors
+
+<a href="https://koumoul.com"><img alt="Koumoul logo" src="https://cdn.jsdelivr.net/gh/data-fair/data-fair@master/docs/assets/koumoul-logo.png" height="56" align="left"></a>
+
+**[Koumoul](https://koumoul.com)** · *La donnée accessible*<br>
+Koumoul develops the Data Fair ecosystem and hosts it as an online service.
+
+<br clear="left">
+
+Click [here to support the development of this project](https://github.com/sponsors/koumoul-dev).
+
+## 🔨 Development
 
 Take a look at the [contribution guidelines](./CONTRIBUTING.md).
