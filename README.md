@@ -66,6 +66,7 @@ Routes:
 - `POST /mcp?profiles=` — the composed set for the requested profiles (default `catalog`), plus extra tools; an undeclared profile is refused
 - `POST /datasets/mcp` — the compatibility alias (see below); `?profiles=` is ignored
 - `GET /v0/servers` — an [MCP Registry API](https://github.com/modelcontextprotocol/registry) document listing `catalog`, `read`, `write` and `manage` (the cells stay selectable by name)
+- `GET /mcp-server/ai-catalog.json` — the site's AI Catalog (MCP Server Card of the `catalog` profile); route `/.well-known/ai-catalog.json` of every site host here
 - `GET /status` — services, last refresh time, active extra tools; in-cluster callers only
 
 ## Environment variables

@@ -83,6 +83,22 @@ describe('app', () => {
     assert.equal(res.headers.get('vary'), 'X-Forwarded-Host')
     assert.equal((await fetch(`${base}/mcp-server/v0/servers`)).status, 200)
   })
+  it('publishes the catalog profile of the requesting site in its AI Catalog', async () => {
+    const res = await fetch(`${base}/mcp-server/ai-catalog.json`, { headers: PROXY })
+    assert.equal(res.status, 200)
+    assert.match(res.headers.get('content-type') ?? '', /^application\/ai-catalog\+json/)
+    assert.equal(res.headers.get('access-control-allow-origin'), '*')
+    assert.equal(res.headers.get('vary'), 'X-Forwarded-Host')
+    const doc: any = await res.json()
+    assert.equal(doc.specVersion, '1.0')
+    assert.equal(doc.entries.length, 1)
+    assert.equal(doc.entries[0].type, 'application/mcp-server-card+json')
+    assert.equal(doc.entries[0].identifier, 'urn:air:portal.test:mcp:catalog')
+    const card = doc.entries[0].data
+    assert.equal(card.$schema, 'https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json')
+    assert.equal(card.name, 'fr.data-fair/catalog')
+    assert.deepEqual(card.remotes, [{ type: 'streamable-http', url: 'https://portal.test/mcp-server/mcp?profiles=catalog' }])
+  })
   it('sets the CORS allow-headers clients need for the session id and the API key', async () => {
     const res = await fetch(`${base}/mcp-server/mcp`, { method: 'OPTIONS' })
     const allow = res.headers.get('access-control-allow-headers') ?? ''

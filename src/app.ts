@@ -6,7 +6,7 @@ import { toNodeHandler } from '@modelcontextprotocol/node'
 import config from '#config'
 import { rateLimitingMiddleware } from './rate-limiting.ts'
 import { requestContext, originFromForwarded } from './context.ts'
-import { registryDocument } from './registry.ts'
+import { aiCatalogDocument, registryDocument } from './registry.ts'
 import type { Composition } from './composition.ts'
 import type { SiteDispatcher } from './site-fetch.ts'
 
@@ -67,6 +67,12 @@ export function createApp (composition: Composition, dispatcher: SiteDispatcher)
   app.get('/v0/servers', ...limiter, (req, res) => {
     cacheable(res)
     res.json(registryDocument({ composer: composition.composer, siteOrigin: siteOf(req), version, locale: config.locale }))
+  })
+  app.get('/ai-catalog.json', ...limiter, (req, res) => {
+    cacheable(res)
+    res.set('Access-Control-Allow-Origin', '*')
+    res.type('application/ai-catalog+json')
+    res.send(JSON.stringify(aiCatalogDocument({ composer: composition.composer, siteOrigin: siteOf(req), version }), null, 2))
   })
   app.get('/status', ...limiter, (req, res) => {
     assertReqInternal(req)

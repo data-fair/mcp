@@ -23,3 +23,32 @@ export function registryDocument (options: { composer: Composer, siteOrigin: str
     }))
   return { servers }
 }
+
+/**
+ * The AI Catalog a site publishes at /.well-known/ai-catalog.json (the ingress maps it here): one entry
+ * embedding the MCP Server Card of the `catalog` profile — what the portal publishes, usable anonymously
+ * — so a client reading the site (an agent's web access) can discover and connect it. Embedded rather
+ * than linked: one request instead of two.
+ */
+export function aiCatalogDocument (options: { composer: Composer, siteOrigin: string, version: string }) {
+  const { composer, siteOrigin, version } = options
+  const catalog = composer.profiles().find(p => p.name === 'catalog')
+  const host = new URL(siteOrigin).host
+  return {
+    specVersion: '1.0' as const,
+    entries: catalog
+      ? [{
+          identifier: `urn:air:${host}:mcp:catalog`,
+          type: 'application/mcp-server-card+json' as const,
+          data: {
+            $schema: 'https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json',
+            name: 'fr.data-fair/catalog',
+            version,
+            description: catalog.description ?? catalog.title ?? 'catalog',
+            ...(catalog.title ? { title: catalog.title } : {}),
+            remotes: [{ type: 'streamable-http', url: `${siteOrigin}/mcp-server/mcp?profiles=catalog` }]
+          }
+        }]
+      : []
+  }
+}
