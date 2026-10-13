@@ -17,6 +17,15 @@ describe('config', () => {
     assert.deepEqual(config.files, { urlPrefixes: [] })
   })
 
+  it('refuses a zero or negative file size or timeout', async () => {
+    const { assertValid } = await import('../config/type/index.ts')
+    const base = (await import('#config')).default
+    for (const files of [{ urlPrefixes: [], maxSize: 0 }, { urlPrefixes: [], maxSize: -1 }, { urlPrefixes: [], timeout: 0 }, { urlPrefixes: [], timeout: -5 }]) {
+      assert.throws(() => assertValid({ ...structuredClone(base), files }, { lang: 'en', name: 'config' }), JSON.stringify(files))
+    }
+    assert.doesNotThrow(() => assertValid({ ...structuredClone(base), files: { urlPrefixes: [], maxSize: 1, timeout: 1 } }, { lang: 'en', name: 'config' }))
+  })
+
   describe('normalizeLists', () => {
     it('parses a JSON array string for the geocode profiles', () => {
       const config = normalizeLists({ extraTools: { geocodeAddress: { profiles: '["catalog"]' } } })

@@ -106,8 +106,8 @@
       "required": ["urlPrefixes"],
       "properties": {
         "urlPrefixes": { "type": "array", "items": { "type": "string" }, "default": [], "description": "URL prefixes of the agents' file store (endpoint and bucket path); the only URLs a file input is fetched from." },
-        "maxSize": { "type": "number", "description": "Largest file accepted, in bytes; default 104857600 (100 MiB)." },
-        "timeout": { "type": "number", "description": "Seconds from the request to the last byte of a file; default 300." }
+        "maxSize": { "type": "number", "exclusiveMinimum": 0, "description": "Largest file accepted, in bytes; default 104857600 (100 MiB)." },
+        "timeout": { "type": "number", "exclusiveMinimum": 0, "description": "Seconds from the request to the last byte of a file; default 300." }
       }
     }
   }

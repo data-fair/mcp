@@ -1,8 +1,8 @@
 import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
 import { startFakeSite, type FakeSite } from '../test/fake-site.ts'
 import { createDispatcher } from './site-fetch.ts'
-import { createServer } from 'node:http'
 import { createComposition, fileOptions, type Composition } from './composition.ts'
 
 describe('composition', () => {
@@ -63,6 +63,10 @@ describe('composition', () => {
     const names = (await composition.main(['write'])).tools.map(t => t.name)
     for (const name of ['datafair_create_dataset_from_file', 'datafair_replace_dataset_file']) assert.ok(!names.includes(name), name)
     for (const name of ['datafair_download_dataset_file', 'datafair_download_dataset_converted_file', 'datafair_export_data']) assert.ok(names.includes(name), name)
+  })
+  it('refuses a file prefix without a scheme at boot', async () => {
+    const config: any = { locale: 'en', indexPath: '/data-fair/api/v1/agents/index.json', refreshInterval: 0, extraTools: { geocodeAddress: { active: false, profiles: ['catalog'] } }, files: { urlPrefixes: ['s3.example.com/agents/'] } }
+    await assert.rejects(createComposition({ config, dispatcher: createDispatcher({ mainSiteUrl: site.origin }), mainSiteUrl: site.origin }))
   })
   it('converts the configured timeout from seconds', () => {
     assert.deepEqual(fileOptions({ urlPrefixes: ['https://s3.test/b/'], timeout: 2 }), { urlPrefixes: ['https://s3.test/b/'], maxSize: undefined, timeout: 2000 })

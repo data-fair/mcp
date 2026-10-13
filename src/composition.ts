@@ -2,7 +2,7 @@
  * One composer for the process, over the main site's index; the composed set for a profile
  * set, the compatibility alias, the extra tools, and the refresh loop.
  */
-import { createComposer, type Composer, type FileLoadOptions, type ToolSet } from '@data-fair/openapi-mcp'
+import { createComposer, createFileFetcher, type Composer, type FileLoadOptions, type ToolSet } from '@data-fair/openapi-mcp'
 import type { ApiConfig } from '#config'
 import { siteFetch, type SiteDispatcher } from './site-fetch.ts'
 import { geocodeAddressTool } from './tools/geocode-address.ts'
@@ -29,6 +29,8 @@ export interface Composition {
 export async function createComposition (options: { config: Pick<ApiConfig, 'locale' | 'indexPath' | 'refreshInterval' | 'extraTools' | 'files' | 'ignoreRateLimiting'>, dispatcher: SiteDispatcher, mainSiteUrl: string }): Promise<Composition> {
   const { config, dispatcher, mainSiteUrl } = options
   const fetchFn = siteFetch(mainSiteUrl, { mainSiteUrl, dispatcher, ignoreRateLimiting: config.ignoreRateLimiting })
+  // a malformed prefix throws here, at boot: left to the composer it would only mark the whole service as errored
+  createFileFetcher(fileOptions(config.files))
   const composer = await createComposer(`${mainSiteUrl}${config.indexPath}`, {
     fetch: fetchFn,
     locale: config.locale,
