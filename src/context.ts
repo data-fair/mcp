@@ -25,8 +25,9 @@ export function originFromForwarded (headers: Headers): string | undefined {
 }
 
 /** The site a request came through: its forwarded origin, else the main site (an in-cluster caller). */
-export function siteOriginOf (request: Request | undefined, mainSiteUrl: string): string {
-  return (request && originFromForwarded(request.headers)) ?? mainSiteUrl
+export function siteOriginOf (source: Request | Headers | undefined, mainSiteUrl: string): string {
+  const headers = source instanceof Headers ? source : source?.headers
+  return (headers && originFromForwarded(headers)) ?? mainSiteUrl
 }
 
 /** Who a caller is, as far as its credentials say: a hash of its cookie, else of its API key. */

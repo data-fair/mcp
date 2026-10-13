@@ -17,8 +17,10 @@ export function linksOnSite (toolSet: ToolSet, siteOrigin: string, mainSiteUrl: 
     async execute (params, ctx) {
       const result = await tool.execute(params, ctx)
       const link = result.resourceLink
-      if (!link || new URL(link.uri).origin !== main) return result
-      const uri = site + link.uri.slice(main.length)
+      if (!link) return result
+      const u = new URL(link.uri)
+      if (u.origin !== main) return result
+      const uri = site + u.pathname + u.search + u.hash
       return { ...result, text: result.text.split(link.uri).join(uri), resourceLink: { ...link, uri } }
     }
   })

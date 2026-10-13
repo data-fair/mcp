@@ -22,6 +22,10 @@ describe('linksOnSite', () => {
     assert.equal(res.resourceLink!.uri, 'https://portal.test/data-fair/api/v1/datasets/ds1/raw?draft=true')
     assert.equal(res.text, 'File ds1-raw, not downloaded by this tool: https://portal.test/data-fair/api/v1/datasets/ds1/raw?draft=true')
   })
+  it('keeps a fragment and rewrites from the parsed URL', async () => {
+    const [tool] = linksOnSite(set(linkTool(`${MAIN}/a%20b/f.csv?x=1#top`)), 'https://portal.test', MAIN).tools
+    assert.equal((await tool.execute({})).resourceLink!.uri, 'https://portal.test/a%20b/f.csv?x=1#top')
+  })
   it('leaves a link on another origin alone', async () => {
     const [tool] = linksOnSite(set(linkTool('https://elsewhere.test/f.csv')), 'https://portal.test', MAIN).tools
     assert.equal((await tool.execute({})).resourceLink!.uri, 'https://elsewhere.test/f.csv')

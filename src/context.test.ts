@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { originFromForwarded, requestContext } from './context.ts'
+import { originFromForwarded, requestContext, siteOriginOf } from './context.ts'
 import { createDispatcher } from './site-fetch.ts'
 
 const config: any = { mode: 'public', mainSiteUrl: 'https://main.test', ignoreRateLimiting: 's' }
@@ -14,6 +14,13 @@ describe('context', () => {
     assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'http', 'x-forwarded-port': '8080' })), 'http://portal.test:8080')
     assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https', 'x-forwarded-port': '443' })), 'https://portal.test')
     assert.equal(originFromForwarded(new Headers({})), undefined)
+  })
+  it('siteOriginOf applies one rule to a request or bare headers', () => {
+    const h = { 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https' }
+    assert.equal(siteOriginOf(new Headers(h), 'https://main.test'), 'https://portal.test')
+    assert.equal(siteOriginOf(new Request('http://x/mcp', { headers: h }), 'https://main.test'), 'https://portal.test')
+    assert.equal(siteOriginOf(new Headers(), 'https://main.test'), 'https://main.test')
+    assert.equal(siteOriginOf(undefined, 'https://main.test'), 'https://main.test')
   })
   it('rejects a malformed host or scheme instead of building a bad origin', () => {
     assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'evil.test/../x', 'x-forwarded-proto': 'https' })), undefined)

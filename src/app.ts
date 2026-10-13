@@ -6,7 +6,7 @@ import type { ToolSet } from '@data-fair/openapi-mcp'
 import { toNodeHandler } from '@modelcontextprotocol/node'
 import config from '#config'
 import { rateLimitingMiddleware } from './rate-limiting.ts'
-import { requestContext, originFromForwarded, siteOriginOf } from './context.ts'
+import { requestContext, siteOriginOf } from './context.ts'
 import { linksOnSite } from './site-links.ts'
 import { aiCatalogDocument, registryDocument } from './registry.ts'
 import type { Composition } from './composition.ts'
@@ -15,7 +15,7 @@ import type { SiteDispatcher } from './site-fetch.ts'
 const version: string = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
 const cacheable = (res: Response) => res.set({ 'Cache-Control': 'public, max-age=300', Vary: 'X-Forwarded-Host' })
 const headersOf = (req: Request) => new Headers(Object.entries(req.headers).flatMap(([k, v]) => v === undefined ? [] : [[k, Array.isArray(v) ? v.join(', ') : v] as [string, string]]))
-const siteOf = (req: Request) => originFromForwarded(headersOf(req)) ?? config.mainSiteUrl!
+const siteOf = (req: Request) => siteOriginOf(headersOf(req), config.mainSiteUrl!)
 /**
  * The one profile parser, used by both the profile check and the handler so they can never disagree:
  * every occurrence of `profiles` (repeated params included), comma-split, trimmed, emptied
