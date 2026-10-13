@@ -21,5 +21,8 @@ module.exports = {
   upstreamProxyHost: undefined,
   extraTools: {
     geocodeAddress: { active: true, profiles: ['catalog'] }
+  },
+  files: {
+    urlPrefixes: []
   }
 }

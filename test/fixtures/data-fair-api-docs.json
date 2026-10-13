@@ -6175,9 +6175,7 @@
         }
       },
       "datasetPost": {
-        "title": "Post dataset body",
         "type": "object",
-        "additionalProperties": false,
         "properties": {
           "slug": {
             "anyOf": [
@@ -6339,126 +6337,9 @@
             ]
           },
           "attachments": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "required": [
-                    "title"
-                  ],
-                  "properties": {
-                    "title": {
-                      "type": "string",
-                      "title": "Titre",
-                      "layout": {
-                        "props": {
-                          "outlined": true,
-                          "dense": true
-                        }
-                      }
-                    },
-                    "description": {
-                      "type": "string",
-                      "title": "Description",
-                      "layout": "markdown"
-                    },
-                    "includeInCatalogPublications": {
-                      "type": "boolean",
-                      "title": "Inclure dans les publications sur catalogue",
-                      "default": false
-                    }
-                  },
-                  "oneOf": [
-                    {
-                      "title": "Fichier",
-                      "required": [
-                        "name"
-                      ],
-                      "properties": {
-                        "type": {
-                          "title": "Type de pièce jointe",
-                          "const": "file"
-                        },
-                        "name": {
-                          "layout": "none",
-                          "type": "string",
-                          "description": "Name of the file that was used to create or update this attachment"
-                        },
-                        "size": {
-                          "layout": "none",
-                          "type": "number",
-                          "description": "Size of the file on disk"
-                        },
-                        "mimetype": {
-                          "layout": "none",
-                          "type": "string",
-                          "description": "Mime type of the file"
-                        },
-                        "updatedAt": {
-                          "layout": "none",
-                          "type": "string",
-                          "description": "Date of the last update for this attachment",
-                          "format": "date-time"
-                        },
-                        "url": {
-                          "layout": "none",
-                          "readOnly": true,
-                          "type": "string",
-                          "title": "URL"
-                        }
-                      }
-                    },
-                    {
-                      "title": "Lien",
-                      "required": [
-                        "url"
-                      ],
-                      "properties": {
-                        "type": {
-                          "title": "Type de pièce jointe",
-                          "const": "url"
-                        },
-                        "url": {
-                          "type": "string",
-                          "title": "URL"
-                        }
-                      }
-                    },
-                    {
-                      "title": "Fichier récupéré depuis une URL",
-                      "required": [
-                        "name"
-                      ],
-                      "properties": {
-                        "type": {
-                          "title": "Type de pièce jointe",
-                          "const": "remoteFile"
-                        },
-                        "name": {
-                          "type": "string",
-                          "title": "Nom du fichier",
-                          "description": "Ce nom doit contenir l'extension qui doit correspondre au format du fichier téléchargé.",
-                          "layout": {
-                            "rules": [
-                              "hasExtension"
-                            ]
-                          }
-                        },
-                        "targetUrl": {
-                          "type": "string",
-                          "title": "URL de téléchargement",
-                          "description": "Cette URL n'est pas consultable après écriture. Elle est utilisée pour télécharger le fichier depuis un service distant et peut contenir un secret. Vous pouvez la laisser vide quand vous modifiez les autres informations, mais vous devez la renseigner de nouveau si vous changez le nom de fichier."
-                        }
-                      }
-                    }
-                  ]
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "type": "string",
+            "format": "binary",
+            "description": "Archive .zip des pièces jointes référencées par les lignes."
           },
           "primaryKey": {
             "anyOf": [
@@ -8047,6 +7928,15 @@
                 "description": "Nom affiché du département."
               }
             }
+          },
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "Le fichier de données. Son type est déduit de l'extension de son nom (.csv, .tsv, .xlsx, .ods, .geojson, .zip d'un shapefile…). Le champ peut aussi s'appeler `dataset`."
+          },
+          "body": {
+            "type": "string",
+            "description": "Les métadonnées, en JSON. Si cette partie est présente, les autres parties de métadonnées sont ignorées."
           }
         }
       },
@@ -10034,7 +9924,7 @@
             "read_datasets"
           ],
           "name": "list_account_datasets",
-          "description": "List the datasets owned by the active account (its department included), with optional text search. Returns id, title, status, row count, and last update.",
+          "description": "List the datasets owned by the active account (its department included), with optional text search. Without q it lists all of them, page by page (count is the total): prefer that for an inventory, since a keyword can miss a dataset worded differently. Returns id, title, status, row count, and last update.",
           "params": {
             "q": {
               "description": "French keywords for full-text search (simple terms, not sentences). Examples: \"élus\", \"DPE\", \"entreprises\""
@@ -10472,6 +10362,20 @@
       "post": {
         "summary": "Créer un jeu de données",
         "description": "Créer un nouveau jeu de données.",
+        "x-agent": {
+          "profiles": [
+            "write_datasets"
+          ],
+          "name": "create_dataset_from_file",
+          "description": "Create a dataset in the active account from a data file: CSV, TSV, XLSX, ODS, GeoJSON, a zipped shapefile… Its type is read from the extension of the file name. The title defaults to the file name. The dataset is analysed and indexed in the background, from seconds to minutes: its rows can be searched once its status is finalized (list_account_datasets shows it).",
+          "bodyFields": [
+            "file",
+            "title"
+          ],
+          "bodyRequired": [
+            "file"
+          ]
+        },
         "operationId": "postDataset",
         "tags": [
           "Jeux de données (JDD)"
@@ -12857,6 +12761,31 @@
         "summary": "Mettre à jour les données",
         "description": "Mettre à jour le fichier de données du jeu de données. La nouvelle version est d'abord chargée en brouillon, puis validée selon le paramètre `draft`.",
         "operationId": "writeData",
+        "x-agent": {
+          "profiles": [
+            "write_datasets"
+          ],
+          "name": "replace_dataset_file",
+          "description": "Replace the data file of a file dataset with a new file; all its rows are replaced, its metadata, permissions and publications are kept. If the new file removes or changes the type of a column, the update waits as a draft for a person to validate it in the back-office; otherwise it is applied once indexed.",
+          "params": {
+            "id": {
+              "name": "datasetId",
+              "description": "The exact dataset ID from the \"id\" field in list_account_datasets (or, on a portal, list_datasets) results. Do not use the title or slug."
+            }
+          },
+          "fixed": {
+            "draft": "compatible"
+          },
+          "bodyFields": [
+            "file"
+          ],
+          "bodyRequired": [
+            "file"
+          ],
+          "annotations": {
+            "destructiveHint": true
+          }
+        },
         "x-permissionClass": "write",
         "tags": [
           "JDD / Données"
@@ -12972,7 +12901,7 @@
             "read_applications"
           ],
           "name": "list_account_applications",
-          "description": "List the applications (data visualizations) owned by the active account (its department included), with optional text search. Returns id, title, status and last update.",
+          "description": "List the applications (data visualizations) owned by the active account (its department included), with optional text search. Without q it lists all of them, page by page (count is the total): prefer that for an inventory. Returns id, title, status and last update.",
           "params": {
             "q": {
               "description": "Keywords for full-text search."
@@ -13542,97 +13471,188 @@
         "summary": "Lire les lignes",
         "description": "Requêter les lignes du jeu de données.",
         "operationId": "readLines",
-        "x-agent": {
-          "profiles": [
-            "catalog",
-            "read_datasets"
-          ],
-          "name": "search_data",
-          "description": "Retrieve dataset rows matching filters and/or full-text search. Do NOT use it to compute statistics — use aggregate_data or calculate_metric. Paginate with the \"after\" value returned as next.",
-          "params": {
-            "id": {
-              "name": "datasetId",
-              "description": "The exact dataset ID from the \"id\" field in list_account_datasets (or, on a portal, list_datasets) results. Do not use the title or slug."
+        "x-agent": [
+          {
+            "profiles": [
+              "catalog",
+              "read_datasets"
+            ],
+            "name": "search_data",
+            "description": "Retrieve dataset rows matching filters and/or full-text search. Do NOT use it to compute statistics — use aggregate_data or calculate_metric. Paginate with the \"after\" value returned as next.",
+            "params": {
+              "id": {
+                "name": "datasetId",
+                "description": "The exact dataset ID from the \"id\" field in list_account_datasets (or, on a portal, list_datasets) results. Do not use the title or slug."
+              },
+              "q": {
+                "name": "query",
+                "description": "Full-text search across all columns. Prefer filters for structured criteria."
+              },
+              "page": {
+                "exclude": true
+              },
+              "highlight": {
+                "exclude": true
+              },
+              "thumbnail": {
+                "exclude": true
+              },
+              "sampling": {
+                "exclude": true
+              },
+              "html": {
+                "exclude": true
+              },
+              "count": {
+                "exclude": true
+              },
+              "hint": {
+                "exclude": true
+              },
+              "collapse": {
+                "exclude": true
+              },
+              "sort": {
+                "description": "Array of column keys to sort by, one per element. Prefix a key with - for descending."
+              },
+              "select": {
+                "description": "Column keys to include in the response, as an array. Use column keys from describe_dataset. If omitted, all columns are returned."
+              },
+              "bbox": {
+                "description": "Bounding box \"lonMin,latMin,lonMax,latMax\" (lon before lat), e.g. \"-2.5,43,3,47\". Geolocalized datasets only."
+              },
+              "geo_distance": {
+                "name": "geoDistance",
+                "description": "Proximity filter \"lon,lat,distance\" (lon first), e.g. \"2.35,48.85,10km\"; distance \"0\" = point-in-polygon. Geolocalized datasets only."
+              },
+              "date_match": {
+                "name": "dateMatch",
+                "description": "Date \"YYYY-MM-DD\" (single day) or \"YYYY-MM-DD,YYYY-MM-DD\" (range), e.g. \"2023-11-21\". Temporal datasets only."
+              },
+              "xyz": {
+                "exclude": true
+              },
+              "qs": {
+                "exclude": true
+              },
+              "q_mode": {
+                "exclude": true
+              },
+              "q_ignored": {
+                "exclude": true
+              },
+              "q_fields": {
+                "exclude": true
+              },
+              "filters": {
+                "description": "Column filters as key-value pairs: column_key + suffix, all values strings. Example: { \"ville_eq\": \"Paris\", \"age_lte\": \"30\", \"nom_search\": \"Jean\" }. Suffixes: _eq, _neq, _in, _nin, _gt, _gte, _lt, _lte, _starts, _exists, _nexists, _search (free-text word search, default choice for text), _contains (only when enabled). If a suffix is rejected the 400 error lists what the column supports — read it and adapt. Never prefix with _c_."
+              },
+              "size": {
+                "default": 12,
+                "maximum": 100
+              },
+              "format": {
+                "exclude": true
+              }
             },
-            "q": {
-              "name": "query",
-              "description": "Full-text search across all columns. Prefer filters for structured criteria."
+            "fixed": {
+              "hint": "true"
             },
-            "size": {
-              "default": 12,
-              "maximum": 100
-            },
-            "page": {
-              "exclude": true
-            },
-            "highlight": {
-              "exclude": true
-            },
-            "thumbnail": {
-              "exclude": true
-            },
-            "sampling": {
-              "exclude": true
-            },
-            "format": {
-              "exclude": true
-            },
-            "html": {
-              "exclude": true
-            },
-            "count": {
-              "exclude": true
-            },
-            "hint": {
-              "exclude": true
-            },
-            "collapse": {
-              "exclude": true
-            },
-            "sort": {
-              "description": "Array of column keys to sort by, one per element. Prefix a key with - for descending."
-            },
-            "select": {
-              "description": "Column keys to include in the response, as an array. Use column keys from describe_dataset. If omitted, all columns are returned."
-            },
-            "bbox": {
-              "description": "Bounding box \"lonMin,latMin,lonMax,latMax\" (lon before lat), e.g. \"-2.5,43,3,47\". Geolocalized datasets only."
-            },
-            "geo_distance": {
-              "name": "geoDistance",
-              "description": "Proximity filter \"lon,lat,distance\" (lon first), e.g. \"2.35,48.85,10km\"; distance \"0\" = point-in-polygon. Geolocalized datasets only."
-            },
-            "date_match": {
-              "name": "dateMatch",
-              "description": "Date \"YYYY-MM-DD\" (single day) or \"YYYY-MM-DD,YYYY-MM-DD\" (range), e.g. \"2023-11-21\". Temporal datasets only."
-            },
-            "xyz": {
-              "exclude": true
-            },
-            "qs": {
-              "exclude": true
-            },
-            "q_mode": {
-              "exclude": true
-            },
-            "q_ignored": {
-              "exclude": true
-            },
-            "q_fields": {
-              "exclude": true
-            },
-            "filters": {
-              "description": "Column filters as key-value pairs: column_key + suffix, all values strings. Example: { \"ville_eq\": \"Paris\", \"age_lte\": \"30\", \"nom_search\": \"Jean\" }. Suffixes: _eq, _neq, _in, _nin, _gt, _gte, _lt, _lte, _starts, _exists, _nexists, _search (free-text word search, default choice for text), _contains (only when enabled). If a suffix is rejected the 400 error lists what the column supports — read it and adapt. Never prefix with _c_."
+            "response": {
+              "rows": "/results",
+              "hints": true
             }
           },
-          "fixed": {
-            "hint": "true"
-          },
-          "response": {
-            "rows": "/results",
-            "hints": true
+          {
+            "profiles": [
+              "read_datasets"
+            ],
+            "name": "export_data",
+            "description": "Export the dataset rows matching filters and/or full-text search to a CSV file, at most 10,000 rows, in the order of sort. Returns a link to the file, not its rows: use it to hand data to another tool or a script, and search_data to read rows yourself.",
+            "params": {
+              "id": {
+                "name": "datasetId",
+                "description": "The exact dataset ID from the \"id\" field in list_account_datasets (or, on a portal, list_datasets) results. Do not use the title or slug."
+              },
+              "q": {
+                "name": "query",
+                "description": "Full-text search across all columns. Prefer filters for structured criteria."
+              },
+              "page": {
+                "exclude": true
+              },
+              "highlight": {
+                "exclude": true
+              },
+              "thumbnail": {
+                "exclude": true
+              },
+              "sampling": {
+                "exclude": true
+              },
+              "html": {
+                "exclude": true
+              },
+              "count": {
+                "exclude": true
+              },
+              "hint": {
+                "exclude": true
+              },
+              "collapse": {
+                "exclude": true
+              },
+              "sort": {
+                "description": "Array of column keys to sort by, one per element. Prefix a key with - for descending."
+              },
+              "select": {
+                "description": "Column keys to include in the response, as an array. Use column keys from describe_dataset. If omitted, all columns are returned."
+              },
+              "bbox": {
+                "description": "Bounding box \"lonMin,latMin,lonMax,latMax\" (lon before lat), e.g. \"-2.5,43,3,47\". Geolocalized datasets only."
+              },
+              "geo_distance": {
+                "name": "geoDistance",
+                "description": "Proximity filter \"lon,lat,distance\" (lon first), e.g. \"2.35,48.85,10km\"; distance \"0\" = point-in-polygon. Geolocalized datasets only."
+              },
+              "date_match": {
+                "name": "dateMatch",
+                "description": "Date \"YYYY-MM-DD\" (single day) or \"YYYY-MM-DD,YYYY-MM-DD\" (range), e.g. \"2023-11-21\". Temporal datasets only."
+              },
+              "xyz": {
+                "exclude": true
+              },
+              "qs": {
+                "exclude": true
+              },
+              "q_mode": {
+                "exclude": true
+              },
+              "q_ignored": {
+                "exclude": true
+              },
+              "q_fields": {
+                "exclude": true
+              },
+              "filters": {
+                "description": "Column filters as key-value pairs: column_key + suffix, all values strings. Example: { \"ville_eq\": \"Paris\", \"age_lte\": \"30\", \"nom_search\": \"Jean\" }. Suffixes: _eq, _neq, _in, _nin, _gt, _gte, _lt, _lte, _starts, _exists, _nexists, _search (free-text word search, default choice for text), _contains (only when enabled). If a suffix is rejected the 400 error lists what the column supports — read it and adapt. Never prefix with _c_."
+              },
+              "after": {
+                "exclude": true
+              },
+              "size": {
+                "default": 10000,
+                "maximum": 10000
+              }
+            },
+            "fixed": {
+              "format": "csv"
+            },
+            "response": {
+              "file": true
+            }
           }
-        },
+        ],
         "x-permissionClass": "read",
         "tags": [
           "JDD / Données"
@@ -14004,6 +14024,45 @@
                       "description": "URL complète pour obtenir la page suivante de la même requête (mêmes filtres, tri et colonnes)."
                     }
                   }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/vnd.oasis.opendocument.spreadsheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/geo+json": {
+                "schema": {
+                  "type": "object"
+                }
+              },
+              "application/x-protobuf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -15840,6 +15899,22 @@
         "summary": "Télécharger",
         "description": "Télécharger le jeu de données dans son format d'origine.",
         "operationId": "downloadOriginalData",
+        "x-agent": {
+          "profiles": [
+            "read_datasets"
+          ],
+          "name": "download_dataset_file",
+          "description": "Get the data file of a file dataset as it was uploaded, in its original format (CSV, XLSX, ODS, GeoJSON, a zipped shapefile…). Returns a link to the file, not its content. Editable and virtual datasets have no data file: use export_data.",
+          "params": {
+            "id": {
+              "name": "datasetId",
+              "description": "The exact dataset ID from the \"id\" field in list_account_datasets (or, on a portal, list_datasets) results. Do not use the title or slug."
+            }
+          },
+          "response": {
+            "file": true
+          }
+        },
         "x-permissionClass": "read",
         "tags": [
           "JDD / Données"
@@ -15885,6 +15960,22 @@
         "summary": "Télécharger (format converti)",
         "description": "Télécharger le jeu de données après conversion automatique vers un format standard (CSV typiquement).",
         "operationId": "downloadConvertedData",
+        "x-agent": {
+          "profiles": [
+            "read_datasets"
+          ],
+          "name": "download_dataset_converted_file",
+          "description": "Get the data file of a file dataset in the format data-fair converted it to for indexing: CSV for spreadsheets and text files, GeoJSON for geographic files. Returns a link to the file, not its content.",
+          "params": {
+            "id": {
+              "name": "datasetId",
+              "description": "The exact dataset ID from the \"id\" field in list_account_datasets (or, on a portal, list_datasets) results. Do not use the title or slug."
+            }
+          },
+          "response": {
+            "file": true
+          }
+        },
         "x-permissionClass": "read",
         "tags": [
           "JDD / Données"
@@ -19051,6 +19142,45 @@
                       "description": "URL complète pour obtenir la page suivante de la même requête (mêmes filtres, tri et colonnes)."
                     }
                   }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/vnd.oasis.opendocument.spreadsheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/geo+json": {
+                "schema": {
+                  "type": "object"
+                }
+              },
+              "application/x-protobuf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }

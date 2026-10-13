@@ -22,7 +22,7 @@ module.exports = {
   mainSiteUrl: 'MAIN_SITE_URL',
   indexPath: 'INDEX_PATH',
   refreshInterval: 'REFRESH_INTERVAL',
-  // JSON array or comma-separated list, both accepted (see normalizeProfileLists in
+  // JSON array or comma-separated list, both accepted (see normalizeLists in
   // src/config.ts) — so __format: 'json' is left off here, the raw string reaches config.
   upstreamProxyHost: 'UPSTREAM_PROXY_HOST',
   extraTools: {
@@ -30,5 +30,11 @@ module.exports = {
       active: { __name: 'EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE', __format: 'json' },
       profiles: 'EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES'
     }
+  },
+  // FILE_URL_PREFIXES: a comma-separated list, split by normalizeLists in src/config.ts
+  files: {
+    urlPrefixes: 'FILE_URL_PREFIXES',
+    maxSize: { __name: 'FILE_MAX_SIZE', __format: 'json' },
+    timeout: { __name: 'FILE_TIMEOUT', __format: 'json' }
   }
 }

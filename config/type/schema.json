@@ -20,7 +20,8 @@
     "transport",
     "indexPath",
     "refreshInterval",
-    "extraTools"
+    "extraTools",
+    "files"
   ],
   "properties": {
     "locale": {
@@ -97,6 +98,16 @@
             "profiles": { "type": "array", "items": { "type": "string" }, "default": ["catalog"], "description": "The tool joins the set when the request's profiles intersect this list." }
           }
         }
+      }
+    },
+    "files": {
+      "type": "object",
+      "description": "File inputs (indirect uploads, see @data-fair/openapi-mcp docs/x-agent.md#files). Without a URL prefix, tools that need a file are not offered.",
+      "required": ["urlPrefixes"],
+      "properties": {
+        "urlPrefixes": { "type": "array", "items": { "type": "string" }, "default": [], "description": "URL prefixes of the agents' file store (endpoint and bucket path); the only URLs a file input is fetched from." },
+        "maxSize": { "type": "number", "description": "Largest file accepted, in bytes; default 104857600 (100 MiB)." },
+        "timeout": { "type": "number", "description": "Seconds from the request to the last byte of a file; default 300." }
       }
     }
   }

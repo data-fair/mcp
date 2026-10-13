@@ -5,12 +5,12 @@ import config from 'config'
 export type { ApiConfig } from '../config/type/index.ts'
 
 /**
- * EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES accepts either a JSON array (`'["catalog","read"]'`)
- * or a comma-separated list (`'catalog,read'`). custom-environment-variables.cjs drops
- * `__format: 'json'` for this key so a plain string reaches here unparsed; this runs before
- * assertValid so the schema (which requires an array) always sees one.
+ * Two variables are lists in a string. EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES accepts a JSON array
+ * (`'["catalog","read"]'`) or a comma-separated list (`'catalog,read'`); FILE_URL_PREFIXES is a
+ * comma-separated list, as for the openapi-mcp binary. custom-environment-variables.cjs leaves
+ * both unparsed; this runs before assertValid so the schema (which requires arrays) sees arrays.
  */
-export function normalizeProfileLists<T extends { extraTools?: { geocodeAddress?: { profiles?: unknown } } }> (config: T): T {
+export function normalizeLists<T extends { extraTools?: { geocodeAddress?: { profiles?: unknown } }, files?: { urlPrefixes?: unknown } }> (config: T): T {
   const toList = (value: unknown): string[] | undefined => {
     if (typeof value !== 'string') return undefined
     const trimmed = value.trim()
@@ -20,6 +20,8 @@ export function normalizeProfileLists<T extends { extraTools?: { geocodeAddress?
   const geocodeAddress = config.extraTools?.geocodeAddress
   const geocodeProfiles = toList(geocodeAddress?.profiles)
   if (geocodeProfiles && geocodeAddress) geocodeAddress.profiles = geocodeProfiles
+  const urlPrefixes = toList(config.files?.urlPrefixes)
+  if (urlPrefixes && config.files) config.files.urlPrefixes = urlPrefixes
   return config
 }
 
@@ -27,7 +29,7 @@ export function normalizeProfileLists<T extends { extraTools?: { geocodeAddress?
 // @ts-ignore
 const apiConfig = process.env.NODE_ENV === 'test' ? config.util.loadFileConfigs(process.env.NODE_CONFIG_DIR, { skipConfigSources: true }) : config
 
-normalizeProfileLists(apiConfig)
+normalizeLists(apiConfig)
 assertValid(apiConfig, { lang: 'en', name: 'config', internal: true })
 
 export default apiConfig as ApiConfig

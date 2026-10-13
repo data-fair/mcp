@@ -88,9 +88,40 @@ Routes:
 | `INDEX_PATH`          | Path of the deployment's agent index on the main site.                                                                                                                   | `/data-fair/api/v1/agents/index.json` | stack only |
 | `REFRESH_INTERVAL`    | Seconds between conditional re-fetches of the index and documents; `0` disables.                                                                                         | `300`   | stack only         |
 | `UPSTREAM_PROXY_HOST` | Optional in-cluster reverse proxy (`host` or `host:port`, or a bracketed IPv6 literal such as `[::1]:8080`) every site host resolves to, skipping public DNS and the outer proxy hop. | —       | stack only         |
+| `FILE_URL_PREFIXES`   | Comma-separated URL prefixes of the agents' file store (endpoint and bucket path, e.g. `https://s3.example.com/agents/`); the only URLs a file input is fetched from. Unset: tools that need a file are not offered. | — | standalone/stack |
+| `FILE_MAX_SIZE`       | Largest file accepted, in bytes. | `104857600` | standalone/stack |
+| `FILE_TIMEOUT`        | Seconds from the request to the last byte of a file. | `300` | standalone/stack |
 | `EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE` | JSON boolean; whether `geocode_address` is composed at all, e.g. `EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE=false`.                                             | `true`  | standalone/stack   |
 | `EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES` | The profiles `geocode_address` joins, as a JSON array or a comma-separated list, e.g. `'["catalog"]'` or `catalog`. | `["catalog"]` | standalone/stack |
 | `PROFILES`            | Comma-separated list of profiles to compose.                                                                                                                             | `catalog` | standalone       |
+
+## Files and structured results
+
+**Files.** Tools that take a file take a URL marked `x-mcp-file`
+([SEP-2631](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2631); the same shape
+as ChatGPT's [`openai/fileParams`](https://developers.openai.com/apps-sdk/reference)): the agents
+service puts the file in its store and passes a presigned URL. This server fetches only URLs under
+`FILE_URL_PREFIXES`, with a plain request that carries none of the caller's credentials, none of
+`siteFetch`'s headers and not the rate-limit secret (a presigned URL authorizes itself), and
+streams the file to the requesting site with an exact `Content-Length` — data-fair refuses a
+chunked upload. Without a prefix, tools that need a file (`datafair_create_dataset_from_file`,
+`datafair_replace_dataset_file`) are not offered at all. Mechanics:
+[openapi-mcp `docs/x-agent.md#files`](https://github.com/data-fair/openapi-mcp/blob/main/docs/x-agent.md#files).
+With `NODE_USE_ENV_PROXY`, put the store's host in `NO_PROXY`.
+
+Tools that return a file (downloads, exports) send no request: they return an MCP
+[`resource_link`](https://modelcontextprotocol.io/specification/latest/server/tools) that the
+client fetches with its own credentials, so no file crosses this server in either direction.
+
+**Structured results.** Tool results carry the parsed JSON response as `structuredContent` (the
+agents service's code mode works on it); the text block stays what a model reads. No tool
+publishes an `outputSchema`, which MCP leaves optional. Measured against data-fair's document
+(2026-10-13), a client that validates results — the TypeScript SDK 1.x does, in `listTools()` and
+`callTool()` — would fail: several response schemas embed the same nested `$id`, which one Ajv
+instance refuses to compile twice, so `listTools()` throws; and real responses do not match their
+schema (computed fields such as `userPermissions` under `additionalProperties: false`, required
+fields projected away by `select`), so `callTool()` refuses them. Output schemas come back when the
+documents' response schemas can be honoured.
 
 ## Compatibility
 

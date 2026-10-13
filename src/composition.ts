@@ -2,10 +2,19 @@
  * One composer for the process, over the main site's index; the composed set for a profile
  * set, the compatibility alias, the extra tools, and the refresh loop.
  */
-import { createComposer, type Composer, type ToolSet } from '@data-fair/openapi-mcp'
+import { createComposer, type Composer, type FileLoadOptions, type ToolSet } from '@data-fair/openapi-mcp'
 import type { ApiConfig } from '#config'
 import { siteFetch, type SiteDispatcher } from './site-fetch.ts'
 import { geocodeAddressTool } from './tools/geocode-address.ts'
+
+/** config.files (seconds, like refreshInterval) as openapi-mcp's file options (milliseconds). */
+export function fileOptions (files: ApiConfig['files'] | undefined): FileLoadOptions {
+  return {
+    urlPrefixes: files?.urlPrefixes ?? [],
+    maxSize: files?.maxSize,
+    timeout: files?.timeout === undefined ? undefined : files.timeout * 1000
+  }
+}
 
 export interface Composition {
   composer: Composer
@@ -17,16 +26,26 @@ export interface Composition {
   close (): void
 }
 
-export async function createComposition (options: { config: Pick<ApiConfig, 'locale' | 'indexPath' | 'refreshInterval' | 'extraTools' | 'ignoreRateLimiting'>, dispatcher: SiteDispatcher, mainSiteUrl: string }): Promise<Composition> {
+export async function createComposition (options: { config: Pick<ApiConfig, 'locale' | 'indexPath' | 'refreshInterval' | 'extraTools' | 'files' | 'ignoreRateLimiting'>, dispatcher: SiteDispatcher, mainSiteUrl: string }): Promise<Composition> {
   const { config, dispatcher, mainSiteUrl } = options
   const fetchFn = siteFetch(mainSiteUrl, { mainSiteUrl, dispatcher, ignoreRateLimiting: config.ignoreRateLimiting })
-  const composer = await createComposer(`${mainSiteUrl}${config.indexPath}`, { fetch: fetchFn, locale: config.locale, lint: 'warn' })
+  const composer = await createComposer(`${mainSiteUrl}${config.indexPath}`, {
+    fetch: fetchFn,
+    locale: config.locale,
+    lint: 'warn',
+    // the parsed JSON for code mode (the agents service); the text stays what a model reads
+    structuredContent: true,
+    files: fileOptions(config.files)
+  })
   for (const s of composer.services) if (s.status !== 'ok') console.warn(`service ${s.id}: ${s.status}${s.reason ? ` — ${s.reason}` : ''}`)
 
   const geocode = config.extraTools.geocodeAddress.active ? geocodeAddressTool({ locale: config.locale as 'en' | 'fr' }) : undefined
+  // Structured content, but no output schema: the response schemas of the composed documents
+  // cannot be honoured exactly (README, "Structured results").
   const withExtras = (toolSet: ToolSet): ToolSet => {
-    if (!geocode || !toolSet.profiles.some(p => config.extraTools.geocodeAddress.profiles.includes(p))) return toolSet
-    return { ...toolSet, tools: [...toolSet.tools, geocode] }
+    const tools = toolSet.tools.map(({ outputSchema, ...tool }) => tool)
+    if (!geocode || !toolSet.profiles.some(p => config.extraTools.geocodeAddress.profiles.includes(p))) return { ...toolSet, tools }
+    return { ...toolSet, tools: [...tools, geocode] }
   }
 
   let lastRefresh: Date | undefined

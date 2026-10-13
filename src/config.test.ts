@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeProfileLists } from './config.ts'
+import { normalizeLists } from './config.ts'
 
 process.env.NODE_CONFIG_DIR = process.cwd() + '/config'
 
@@ -14,20 +14,25 @@ describe('config', () => {
     assert.equal(config.upstreamProxyHost, undefined)
     assert.deepEqual(config.extraTools, { geocodeAddress: { active: true, profiles: ['catalog'] } })
     assert.equal(config.observer.port, 9090)
+    assert.deepEqual(config.files, { urlPrefixes: [] })
   })
 
-  describe('normalizeProfileLists', () => {
+  describe('normalizeLists', () => {
     it('parses a JSON array string for the geocode profiles', () => {
-      const config = normalizeProfileLists({ extraTools: { geocodeAddress: { profiles: '["catalog"]' } } })
+      const config = normalizeLists({ extraTools: { geocodeAddress: { profiles: '["catalog"]' } } })
       assert.deepEqual(config.extraTools!.geocodeAddress!.profiles, ['catalog'])
     })
     it('splits a comma-separated string, trims, and drops empty entries', () => {
-      const config = normalizeProfileLists({ extraTools: { geocodeAddress: { profiles: ' catalog, read ,,' } } })
+      const config = normalizeLists({ extraTools: { geocodeAddress: { profiles: ' catalog, read ,,' } } })
       assert.deepEqual(config.extraTools!.geocodeAddress!.profiles, ['catalog', 'read'])
     })
     it('leaves an already-array value untouched', () => {
-      const config = normalizeProfileLists({ extraTools: { geocodeAddress: { profiles: ['catalog'] } } })
+      const config = normalizeLists({ extraTools: { geocodeAddress: { profiles: ['catalog'] } } })
       assert.deepEqual(config.extraTools!.geocodeAddress!.profiles, ['catalog'])
+    })
+    it('splits FILE_URL_PREFIXES, a comma-separated list', () => {
+      const config = normalizeLists({ files: { urlPrefixes: 'https://s3.test/bucket/ , https://s3.test/other/' } } as any)
+      assert.deepEqual(config.files.urlPrefixes, ['https://s3.test/bucket/', 'https://s3.test/other/'])
     })
   })
 })

@@ -6,7 +6,7 @@
 import { createServer, type Server } from 'node:http'
 import { readFileSync } from 'node:fs'
 
-export interface FakeSite { origin: string, port: number, hits: { url: string, headers: Record<string, string | string[] | undefined> }[], setDoc (patch: (doc: any) => void): void, close (): Promise<void> }
+export interface FakeSite { origin: string, port: number, hits: { url: string, headers: Record<string, string | string[] | undefined> }[], uploads: { headers: Record<string, string | string[] | undefined>, body: Buffer }[], setDoc (patch: (doc: any) => void): void, close (): Promise<void> }
 
 export async function startFakeSite (): Promise<FakeSite> {
   let doc = JSON.parse(readFileSync(new URL('./fixtures/data-fair-api-docs.json', import.meta.url), 'utf8'))
@@ -14,6 +14,7 @@ export async function startFakeSite (): Promise<FakeSite> {
   const FIXTURE_ORIGIN = 'http://fixture.test'
   let etag = 1
   const hits: FakeSite['hits'] = []
+  const uploads: FakeSite['uploads'] = []
   let origin = ''
   const server: Server = createServer((req, res) => {
     const url = new URL(req.url!, origin)
@@ -34,6 +35,17 @@ export async function startFakeSite (): Promise<FakeSite> {
       if (req.headers['if-none-match'] === `"${etag}"`) { res.writeHead(304); return res.end() }
       return json({ ...doc, servers: [{ url: `${origin}/data-fair/api/v1` }] }, { etag: `"${etag}"` })
     }
+    // a dataset upload: recorded with its headers and exact bytes, as data-fair would receive it
+    if (req.method === 'POST' && url.pathname === '/data-fair/api/v1/datasets') {
+      const chunks: Buffer[] = []
+      req.on('data', (c: Buffer) => chunks.push(c))
+      req.on('end', () => {
+        uploads.push({ headers: req.headers as any, body: Buffer.concat(chunks) })
+        res.writeHead(201, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ id: 'ds-new', status: 'created' }))
+      })
+      return
+    }
     // the account listing and the catalog listing answer the same canned page
     if (url.pathname === '/data-fair/api/v1/datasets' || url.pathname === '/data-fair/api/v1/catalog/datasets') {
       return json({ count: 1, results: [{ id: 'ds1', slug: 'ds1', title: `Seen by ${req.headers['x-forwarded-host'] ?? req.headers.host}`, summary: `cookie=${req.headers.cookie ?? ''} apikey=${req.headers['x-apikey'] ?? ''}`, count: 1, status: 'finalized', updatedAt: '2026-01-01T00:00:00Z', page: `${origin}/datasets/ds1` }] })
@@ -47,6 +59,7 @@ export async function startFakeSite (): Promise<FakeSite> {
     origin,
     port,
     hits,
+    uploads,
     setDoc (patch) { doc = structuredClone(doc); patch(doc); etag++ },
     close: () => new Promise<void>(resolve => server.close(() => resolve()))
   }
