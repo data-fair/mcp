@@ -113,6 +113,11 @@ Tools that return a file (downloads, exports) send no request: they return an MC
 [`resource_link`](https://modelcontextprotocol.io/specification/latest/server/tools) that the
 client fetches with its own credentials, so no file crosses this server in either direction.
 
+A link is built on the main site's URL, where the tools were composed; this server moves it onto
+the site the call came through (`X-Forwarded-Host`), as `siteFetch` does for every request, so a
+caller on a portal receives a portal URL. An in-cluster caller without forwarded headers gets the
+main site's.
+
 **Structured results.** Tool results carry the parsed JSON response as `structuredContent` (the
 agents service's code mode works on it); the text block stays what a model reads. No tool
 publishes an `outputSchema`, which MCP leaves optional. Measured against data-fair's document

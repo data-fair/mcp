@@ -24,6 +24,11 @@ export function originFromForwarded (headers: Headers): string | undefined {
   return `${proto}://${host}${explicit ? ':' + port : ''}`
 }
 
+/** The site a request came through: its forwarded origin, else the main site (an in-cluster caller). */
+export function siteOriginOf (request: Request | undefined, mainSiteUrl: string): string {
+  return (request && originFromForwarded(request.headers)) ?? mainSiteUrl
+}
+
 /** Who a caller is, as far as its credentials say: a hash of its cookie, else of its API key. */
 export function credentialIdentity (credentials: { cookie?: string | null, apiKey?: string | null }): string | undefined {
   const secret = credentials.cookie || credentials.apiKey
@@ -34,7 +39,7 @@ export function requestContext (options: { config: Pick<ApiConfig, 'mainSiteUrl'
   const { config, dispatcher } = options
   return (request) => {
     const headers = request?.headers ?? new Headers()
-    const siteOrigin = originFromForwarded(headers) ?? config.mainSiteUrl!
+    const siteOrigin = siteOriginOf(request, config.mainSiteUrl!)
     const forwarded: Record<string, string> = {}
     const cookie = headers.get('cookie')
     const apiKey = headers.get('x-apikey') ?? headers.get('x-api-key')

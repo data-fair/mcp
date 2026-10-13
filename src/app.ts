@@ -2,10 +2,12 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import { readFileSync } from 'node:fs'
 import { createSiteMiddleware, errorHandler, assertReqInternal } from '@data-fair/lib-express'
 import { createMcpHttpHandler } from '@data-fair/openapi-mcp/adapters/mcp'
+import type { ToolSet } from '@data-fair/openapi-mcp'
 import { toNodeHandler } from '@modelcontextprotocol/node'
 import config from '#config'
 import { rateLimitingMiddleware } from './rate-limiting.ts'
-import { requestContext, originFromForwarded } from './context.ts'
+import { requestContext, originFromForwarded, siteOriginOf } from './context.ts'
+import { linksOnSite } from './site-links.ts'
 import { aiCatalogDocument, registryDocument } from './registry.ts'
 import type { Composition } from './composition.ts'
 import type { SiteDispatcher } from './site-fetch.ts'
@@ -57,8 +59,11 @@ export function createApp (composition: Composition, dispatcher: SiteDispatcher)
 
   const context = requestContext({ config, dispatcher })
   const options = { context, refreshMs: config.refreshInterval > 0 ? config.refreshInterval * 1000 : undefined }
-  const main = createMcpHttpHandler((request) => composition.main(request ? profilesOf(new URL(request.url).searchParams) : ['catalog']), { name: 'datafair-mcp-server', version }, options)
-  const alias = createMcpHttpHandler(() => composition.alias(), { name: 'datafair-datasets-mcp-server', version }, options)
+  // file links follow the requesting site, like every upstream call (src/site-links.ts)
+  // the MCP handler passes the fetch Request (globalThis.Request), not Express's `Request` imported above
+  const onSite = (request: globalThis.Request | undefined) => (toolSet: ToolSet) => linksOnSite(toolSet, siteOriginOf(request, config.mainSiteUrl!), config.mainSiteUrl!)
+  const main = createMcpHttpHandler((request) => composition.main(request ? profilesOf(new URL(request.url).searchParams) : ['catalog']).then(onSite(request)), { name: 'datafair-mcp-server', version }, options)
+  const alias = createMcpHttpHandler((request) => composition.alias().then(onSite(request)), { name: 'datafair-datasets-mcp-server', version }, options)
   composition.composer.onChange(() => { for (const h of [main, alias]) { h.notify.toolsChanged(); h.notify.resourcesChanged() } })
 
   app.all('/mcp', cors, ...limiter, knownProfiles, toNodeHandler(main))

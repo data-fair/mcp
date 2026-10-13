@@ -66,6 +66,22 @@ describe('app', () => {
     assert.match(res.content[0].text, /Seen by 127\.0\.0\.1:\d+/)
     await client.close()
   })
+
+  it('hands out file links on the site the call came through', async () => {
+    const onPortal = await connect('/mcp-server/mcp?profiles=read', PROXY)
+    try {
+      const res: any = await onPortal.callTool({ name: 'datafair_download_dataset_file', arguments: { datasetId: 'ds1' } })
+      const link = res.content.find((c: any) => c.type === 'resource_link')
+      assert.equal(link.uri, 'https://portal.test/data-fair/api/v1/datasets/ds1/raw')
+      assert.ok(res.content[0].text.includes('https://portal.test/data-fair/api/v1/datasets/ds1/raw'))
+      assert.ok(!res.content[0].text.includes(site.origin), 'no main-site URL left in the text')
+    } finally { await onPortal.close() }
+    const inCluster = await connect('/mcp?profiles=read')
+    try {
+      const res: any = await inCluster.callTool({ name: 'datafair_download_dataset_file', arguments: { datasetId: 'ds1' } })
+      assert.equal(res.content.find((c: any) => c.type === 'resource_link').uri, `${site.origin}/data-fair/api/v1/datasets/ds1/raw`)
+    } finally { await inCluster.close() }
+  })
   it('serves the alias at /mcp-server/datasets/mcp with the seven names, whatever the profiles', async () => {
     for (const path of ['/mcp-server/datasets/mcp', '/mcp-server/datasets/mcp?profiles=manage']) {
       assert.deepEqual(await names(path), ['list_datasets', 'describe_dataset', 'search_data', 'get_field_values', 'aggregate_data', 'calculate_metric', 'geocode_address'], path)
