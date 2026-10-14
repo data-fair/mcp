@@ -24,6 +24,18 @@ export function registryDocument (options: { composer: Composer, siteOrigin: str
   return { servers }
 }
 
+/** The whole vocabulary (GET /profiles): what a host needs to offer a choice of profiles and check one. */
+export function profilesDocument (composer: Composer) {
+  return {
+    profiles: composer.profiles().map(p => ({
+      name: p.name,
+      ...(p.title ? { title: p.title } : {}),
+      ...(p.description ? { description: p.description } : {}),
+      ...(p.includes?.length ? { includes: p.includes } : {})
+    }))
+  }
+}
+
 /**
  * The AI Catalog a site publishes at /.well-known/ai-catalog.json (the ingress maps it here): one entry
  * embedding the MCP Server Card of the `catalog` profile — what the portal publishes, usable anonymously

@@ -8,7 +8,7 @@ import config from '#config'
 import { rateLimitingMiddleware } from './rate-limiting.ts'
 import { requestContext, siteOriginOf } from './context.ts'
 import { linksOnSite } from './site-links.ts'
-import { aiCatalogDocument, registryDocument } from './registry.ts'
+import { aiCatalogDocument, registryDocument, profilesDocument } from './registry.ts'
 import type { Composition } from './composition.ts'
 import type { SiteDispatcher } from './site-fetch.ts'
 
@@ -72,6 +72,10 @@ export function createApp (composition: Composition, dispatcher: SiteDispatcher)
   app.get('/v0/servers', ...limiter, (req, res) => {
     cacheable(res)
     res.json(registryDocument({ composer: composition.composer, siteOrigin: siteOf(req), version, locale: config.locale }))
+  })
+  app.get('/profiles', ...limiter, (req, res) => {
+    cacheable(res)
+    res.json(profilesDocument(composition.composer))
   })
   app.get('/ai-catalog.json', ...limiter, (req, res) => {
     cacheable(res)
