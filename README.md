@@ -60,7 +60,7 @@ This server has no general rate limiting of its own. nginx limits callers on the
 tool call that costs anything is a data-fair call, limited there by the caller's identity or by the IP
 this server forwards (`X-Forwarded-For`, with the `TRUSTED_FORWARDER` secret that lets the ingress trust
 it; a caller acting for no address, an autonomous agent's planned task, forwards none). The one
-exception is `geocode_address`, which calls IGN: a global budget per instance and a per-caller one
+exception is `geocode_address`, which calls IGN: a global budget per instance and a per-caller one (forwarded IP, else identity)
 (`EXTRA_TOOLS_GEOCODE_ADDRESS_LIMITS`). See data-fair's `docs/architecture/agent-rate-limiting.md`.
 
 Routes:

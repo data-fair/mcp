@@ -86,13 +86,16 @@ describe('geocode_address', () => {
     assert.equal((await tool.execute({ q: 'Rennes' }, from('2001:db8:1:2::1'))).isError, undefined)
     assert.equal((await tool.execute({ q: 'Rennes' }, from('2001:db8:1:2::2'))).isError, true, 'the same /64')
   })
-  it('refuses a call with no caller to account it to, without calling IGN', async () => {
-    const before = seen.length
-    const tool = geocodeAddressTool({ base, limits: { global: { nb: 100, duration: 60 }, perCaller: { nb: 100, duration: 60 } } })
-    const refused = await tool.execute({ q: 'Rennes' }, {})
-    assert.equal(refused.isError, true)
-    assert.match(refused.text, /no caller/)
-    assert.doesNotMatch(refused.text, /retry/)
-    assert.equal(seen.length, before)
+  it('charges a call with no caller (stdio, a planned task) to the global budget only', async () => {
+    const tool = geocodeAddressTool({ base, limits: { global: { nb: 2, duration: 60 }, perCaller: { nb: 1, duration: 60 } } })
+    assert.equal((await tool.execute({ q: 'Rennes' }, {})).isError, undefined)
+    assert.equal((await tool.execute({ q: 'Rennes' }, {})).isError, undefined, 'no per-caller budget to spend')
+    assert.equal((await tool.execute({ q: 'Rennes' }, {})).isError, true, 'the global one still applies')
+  })
+  it('keys on the forwarded IP before the identity, which is not verified here', async () => {
+    const tool = geocodeAddressTool({ base, limits: { global: { nb: 100, duration: 60 }, perCaller: { nb: 1, duration: 60 } } })
+    const call = (identity: string) => tool.execute({ q: 'Rennes' }, { identity, headers: { 'x-forwarded-for': '203.0.113.9' } })
+    assert.equal((await call('made-up-1')).isError, undefined)
+    assert.equal((await call('made-up-2')).isError, true, 'a fresh made-up credential from the same IP gets no new budget')
   })
 })

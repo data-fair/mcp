@@ -74,9 +74,10 @@ export function geocodeAddressTool (options: { fetch?: typeof fetch, base?: stri
       } catch (err: any) {
         return { isError: true, text: err.message }
       }
-      // the caller: its identity (session cookie or API key hash), else its forwarded IP (an IPv6 one as its /64)
+      // the caller: its forwarded IP (an IPv6 one as its /64), else its identity. The IP first: the identity
+      // is a hash of credentials nobody verified here, a fresh made-up one per call would get a fresh budget
       const ip = ctx?.headers?.['x-forwarded-for']
-      const taken = take?.(ctx?.identity ?? (ip ? ipRateLimitKey(ip) : undefined))
+      const taken = take?.(ip ? ipRateLimitKey(ip) : ctx?.identity)
       if (taken && !taken.ok) {
         return { isError: true, text: taken.retryAfterSeconds ? `Geocoding refused: ${taken.reason}. The geocoder is busy; retry in ${taken.retryAfterSeconds} s.` : `Geocoding refused: ${taken.reason}.` }
       }
