@@ -1,7 +1,7 @@
 /**
  * The one place upstream calls are shaped. Portals' 01-local-fetch.ts recipe: the site's
  * public origin (so the reverse proxy's metrics count the call), DNS resolved once, short
- * timeouts, the rate-limit bypass secret, and the caller's cookies forwarded — plus, when
+ * timeouts, the trusted-forwarder secret, and the caller's cookies and IP forwarded — plus, when
  * upstreamProxyHost is set, a direct hop to the in-cluster L2 nginx that skips public DNS
  * and the L1 proxy while looking, to that nginx, exactly like a proxied request.
  */
@@ -11,7 +11,8 @@ import { Agent, ProxyAgent, interceptors, type Dispatcher } from 'undici'
 export interface SiteFetchOptions {
   /** origin the composed tools carry in their URLs */
   mainSiteUrl: string
-  ignoreRateLimiting?: string
+  /** proves to the ingress that X-Forwarded-For (or its absence) is ours to set (data-fair docs/architecture/agent-rate-limiting.md) */
+  trustedForwarder?: string
 }
 
 /**
@@ -87,7 +88,8 @@ export function siteFetch (siteOrigin: string, options: SiteFetchOptions & { dis
     headers.set('user-agent', '@data-fair/mcp')
     if (ours) {
       headers.set('referer', `${siteOrigin}/mcp`)
-      if (options.ignoreRateLimiting) headers.set('x-ignore-rate-limiting', options.ignoreRateLimiting)
+      // the ingress keys its limits on the caller's forwarded IP, or on nothing for a caller acting for no address
+      if (options.trustedForwarder) headers.set('x-trusted-forwarder', options.trustedForwarder)
       if (proxy) {
         // capture the site's host (with its port, if any) and scheme before the proxy hop
         // rewrites both, so X-Forwarded-Host/-Proto reflect what the caller actually reached
@@ -99,11 +101,12 @@ export function siteFetch (siteOrigin: string, options: SiteFetchOptions & { dis
         headers.set('x-forwarded-proto', forwardedProto)
       }
     } else {
-      // a foreign origin never sees the caller's credentials or the rate-limit bypass secret:
+      // a foreign origin never sees the caller's credentials, IP or the forwarder secret:
       // the library merges the caller's headers into every tool call before siteFetch runs,
       // so a service document pointing a tool at some other host must not receive them.
       headers.delete('cookie')
       headers.delete('x-apikey')
+      headers.delete('x-forwarded-for')
     }
     const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : req.body
     return fetch(url, { method: req.method, headers, body, signal: req.signal, dispatcher: options.dispatcher.dispatcher, duplex: body ? 'half' : undefined } as RequestInit)

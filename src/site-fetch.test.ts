@@ -29,12 +29,13 @@ describe('siteFetch', () => {
   it('swaps the main site origin for the requesting site and sets the server headers', async () => {
     const main = `http://127.0.0.1:${port}`
     const dispatcher = createDispatcher({ mainSiteUrl: main })
-    const f = siteFetch(`http://localhost:${port}`, { mainSiteUrl: main, dispatcher, ignoreRateLimiting: 'secret' })
+    const f = siteFetch(`http://localhost:${port}`, { mainSiteUrl: main, dispatcher, trustedForwarder: 'secret' })
     const body: any = await (await f(new Request(`${main}/data-fair/api/v1/datasets?size=1`, { headers: { cookie: 'id_token=abc' } }))).json()
     assert.equal(body.host, `localhost:${port}`)
     assert.equal(body.url, '/data-fair/api/v1/datasets?size=1')
     assert.equal(body.headers.cookie, 'id_token=abc')
-    assert.equal(body.headers['x-ignore-rate-limiting'], 'secret')
+    assert.equal(body.headers['x-trusted-forwarder'], 'secret')
+    assert.equal(body.headers['x-ignore-rate-limiting'], undefined)
     assert.equal(body.headers.referer, `http://localhost:${port}/mcp`)
     assert.equal(body.headers['user-agent'], '@data-fair/mcp')
   })
@@ -42,13 +43,14 @@ describe('siteFetch', () => {
   it('leaves a foreign origin alone, and strips the caller\'s credentials for it', async () => {
     const main = 'https://main.test'
     const dispatcher = createDispatcher({ mainSiteUrl: main })
-    const f = siteFetch('https://site.test', { mainSiteUrl: main, dispatcher, ignoreRateLimiting: 'secret' })
-    const body: any = await (await f(new Request(`http://127.0.0.1:${port}/elsewhere`, { headers: { cookie: 'id_token=abc', 'x-apikey': 'k' } }))).json()
+    const f = siteFetch('https://site.test', { mainSiteUrl: main, dispatcher, trustedForwarder: 'secret' })
+    const body: any = await (await f(new Request(`http://127.0.0.1:${port}/elsewhere`, { headers: { cookie: 'id_token=abc', 'x-apikey': 'k', 'x-forwarded-for': '203.0.113.7' } }))).json()
     assert.equal(body.url, '/elsewhere')
     assert.equal(body.host, `127.0.0.1:${port}`)
     assert.equal(body.headers.cookie, undefined)
     assert.equal(body.headers['x-apikey'], undefined)
-    assert.equal(body.headers['x-ignore-rate-limiting'], undefined)
+    assert.equal(body.headers['x-trusted-forwarder'], undefined)
+    assert.equal(body.headers['x-forwarded-for'], undefined)
     assert.equal(body.headers.referer, undefined)
   })
 

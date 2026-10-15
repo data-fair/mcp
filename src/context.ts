@@ -5,7 +5,9 @@
  * call goes and which identity data-fair will see.
  */
 import { createHash } from 'node:crypto'
+import type { IncomingMessage } from 'node:http'
 import type { CallContext } from '@data-fair/openapi-mcp'
+import { reqIp } from '@data-fair/lib-express/req-origin.js'
 import type { ApiConfig } from '#config'
 import { siteFetch, type SiteDispatcher } from './site-fetch.ts'
 
@@ -36,7 +38,7 @@ export function credentialIdentity (credentials: { cookie?: string | null, apiKe
   return secret ? createHash('sha256').update(secret).digest('hex') : undefined
 }
 
-export function requestContext (options: { config: Pick<ApiConfig, 'mainSiteUrl' | 'ignoreRateLimiting'>, dispatcher: SiteDispatcher }): (request: Request | undefined) => CallContext {
+export function requestContext (options: { config: Pick<ApiConfig, 'mainSiteUrl' | 'trustedForwarder'>, dispatcher: SiteDispatcher }): (request: Request | undefined) => CallContext {
   const { config, dispatcher } = options
   return (request) => {
     const headers = request?.headers ?? new Headers()
@@ -46,8 +48,12 @@ export function requestContext (options: { config: Pick<ApiConfig, 'mainSiteUrl'
     const apiKey = headers.get('x-apikey') ?? headers.get('x-api-key')
     if (cookie) forwarded.cookie = cookie
     if (apiKey) forwarded['x-apikey'] = apiKey
+    // the caller's IP, forwarded so the stack limits it as if it called directly; none for a caller
+    // acting for nobody's address (a planned task), which the stack then limits by its identity
+    const clientIp = reqIp({ headers: Object.fromEntries(headers) } as IncomingMessage, { optional: true })
+    if (clientIp) forwarded['x-forwarded-for'] = clientIp
     return {
-      fetch: siteFetch(siteOrigin, { mainSiteUrl: config.mainSiteUrl!, dispatcher, ignoreRateLimiting: config.ignoreRateLimiting }),
+      fetch: siteFetch(siteOrigin, { mainSiteUrl: config.mainSiteUrl!, dispatcher, trustedForwarder: config.trustedForwarder }),
       headers: Object.keys(forwarded).length ? forwarded : undefined,
       identity: credentialIdentity({ cookie, apiKey })
     }

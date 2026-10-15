@@ -56,13 +56,12 @@ service alike (parity: our own agents get no surface another agent cannot reach)
 profile is available to every caller; what a caller may actually do is data-fair's permissions
 on the identity it forwards (cookie or API key).
 
-Rate limiting is per caller on every route, in-cluster callers included: by claimed identity (a
-hash of the `id_token` session cookie or of the API key) when there is one, by client IP otherwise —
-and always under a per-IP ceiling (10× the per-caller budget), since identities are not verified
-here. `IGNORE_RATE_LIMITING` is a temporary measure: it makes
-data-fair skip its own limits for relayed calls. The plan to replace it — the caller's IP and
-identity reaching data-fair and the ingress through a trusted forwarder — is data-fair's
-`docs/architecture/agent-rate-limiting.md`.
+This server has no general rate limiting of its own. nginx limits callers on the way in, and every
+tool call that costs anything is a data-fair call, limited there by the caller's identity or by the IP
+this server forwards (`X-Forwarded-For`, with the `TRUSTED_FORWARDER` secret that lets the ingress trust
+it; a caller acting for no address, an autonomous agent's planned task, forwards none). The one
+exception is `geocode_address`, which calls IGN: a global budget per instance and a per-caller one
+(`EXTRA_TOOLS_GEOCODE_ADDRESS_LIMITS`). See data-fair's `docs/architecture/agent-rate-limiting.md`.
 
 Routes:
 
@@ -80,7 +79,7 @@ Routes:
 | `PORTAL_URL`          | Base URL of the Data Fair portal. Required in standalone mode.                                                                                                           | —       | standalone         |
 | `DATA_FAIR_API_KEY`   | API key sent to Data Fair for authentication.                                                                                                                            | —       | standalone         |
 | `LOCALE`              | Locale for tool titles: `en` or `fr`.                                                                                                                                    | `en`    | standalone/stack   |
-| `IGNORE_RATE_LIMITING`| Secret key sent to Data Fair to bypass its rate limiting — temporary, see data-fair `docs/architecture/agent-rate-limiting.md`. | —       | stack only         |
+| `TRUSTED_FORWARDER`   | Secret sent to the ingress (`X-Trusted-Forwarder`) with the caller's IP, or with none for a caller acting for no address; see data-fair `docs/architecture/agent-rate-limiting.md`. | — | stack only |
 | `TRANSPORT`           | Transport mode: `stdio` (standalone) or `http` (stack).                                                                                                                  | `stdio` | standalone/stack   |
 | `PORT`                | Port for the HTTP server to listen on.                                                                                                                                   | `8080`  | stack only         |
 | `OBSERVER_ACTIVE`     | Enable Prometheus metrics.                                                                                                                                               | `true`  | stack only         |
@@ -94,6 +93,7 @@ Routes:
 | `FILE_TIMEOUT`        | Seconds from the request to the last byte of a file. | `300` | standalone/stack |
 | `EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE` | JSON boolean; whether `geocode_address` is composed at all, e.g. `EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE=false`.                                             | `true`  | standalone/stack   |
 | `EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES` | The profiles `geocode_address` joins, as a JSON array or a comma-separated list, e.g. `'["catalog"]'` or `catalog`. | `["catalog"]` | standalone/stack |
+| `EXTRA_TOOLS_GEOCODE_ADDRESS_LIMITS` | JSON: `{ "global": { "nb", "duration" }, "perCaller": { "nb", "duration" } }`, calls to IGN per instance and per caller (IGN allows 50 requests per second per source IP: divide by replicas). | 40/s, 10/s | standalone/stack |
 | `PROFILES`            | Comma-separated list of profiles to compose.                                                                                                                             | `catalog` | standalone       |
 
 ## Files and structured results

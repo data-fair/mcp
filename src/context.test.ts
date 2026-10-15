@@ -4,11 +4,17 @@ import { createHash } from 'node:crypto'
 import { originFromForwarded, requestContext, siteOriginOf } from './context.ts'
 import { createDispatcher } from './site-fetch.ts'
 
-const config: any = { mode: 'public', mainSiteUrl: 'https://main.test', ignoreRateLimiting: 's' }
+const config: any = { mode: 'public', mainSiteUrl: 'https://main.test', trustedForwarder: 's' }
 const dispatcher = createDispatcher({ mainSiteUrl: config.mainSiteUrl })
 const ctxOf = (headers: Record<string, string>) => requestContext({ config, dispatcher })(new Request('http://x/mcp', { headers }))
 
 describe('context', () => {
+  it('forwards the caller\'s IP upstream when the request carries one', () => {
+    assert.equal(ctxOf({ 'x-forwarded-for': '203.0.113.7' }).headers?.['x-forwarded-for'], '203.0.113.7')
+  })
+  it('forwards no IP for a caller acting for nobody\'s address (a planned task)', () => {
+    assert.equal(ctxOf({ cookie: 'id_token=a' }).headers?.['x-forwarded-for'], undefined)
+  })
   it('reads the site origin from the forwarded headers, port included when non-default', () => {
     assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https' })), 'https://portal.test')
     assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'http', 'x-forwarded-port': '8080' })), 'http://portal.test:8080')

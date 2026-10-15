@@ -20,7 +20,7 @@ describe('app', () => {
   }
   before(async () => {
     site = await startFakeSite()
-    Object.assign(config, { mainSiteUrl: site.origin, refreshInterval: 0, ignoreRateLimiting: 'secret', upstreamProxyHost: `127.0.0.1:${site.port}` })
+    Object.assign(config, { mainSiteUrl: site.origin, refreshInterval: 0, trustedForwarder: 'secret', upstreamProxyHost: `127.0.0.1:${site.port}` })
     const { createDispatcher } = await import('./site-fetch.ts')
     const { createComposition } = await import('./composition.ts')
     const { createApp } = await import('./app.ts')
@@ -41,7 +41,7 @@ describe('app', () => {
     assert.match(res.content[0].text, /cookie=id_token=abc/)
     const hit = site.hits.at(-1)!
     assert.equal(hit.headers.referer, 'https://portal.test/mcp')
-    assert.equal(hit.headers['x-ignore-rate-limiting'], 'secret')
+    assert.equal(hit.headers['x-trusted-forwarder'], 'secret')
     assert.equal(hit.headers['x-forwarded-host'], 'portal.test')
     await client.close()
   })
@@ -136,62 +136,10 @@ describe('app', () => {
     assert.match(allow, /x-apiKey/)
     assert.match(allow, /Mcp-Session-Id/)
   })
-  it('limits a proxied caller without X-Forwarded-For by its socket address instead of failing', async () => {
-    const res = await fetch(`${base}/mcp-server/v0/servers`, { headers: { 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https' } })
-    assert.equal(res.status, 200)
-  })
-  it('rate-limits anonymous callers per IP', async () => {
-    const before = config.defaultLimits.apiRate!.nb
-    config.defaultLimits.apiRate!.nb = 1
-    try {
-      const h = { ...PROXY, 'x-forwarded-for': '198.51.100.9' }
-      await fetch(`${base}/mcp-server/v0/servers`, { headers: h })
-      assert.equal((await fetch(`${base}/mcp-server/v0/servers`, { headers: h })).status, 429)
-    } finally { config.defaultLimits.apiRate!.nb = before }
-  })
-  it('rate-limits authenticated callers per identity, not per IP', async () => {
-    const before = config.defaultLimits.apiRate!.nb
-    config.defaultLimits.apiRate!.nb = 1
-    try {
-      const get = (ip: string, cookie: string) => fetch(`${base}/mcp-server/v0/servers`, { headers: { ...PROXY, 'x-forwarded-for': ip, cookie } })
-      assert.equal((await get('198.51.100.20', 'id_token=alice')).status, 200)
-      assert.equal((await get('198.51.100.20', 'id_token=bob')).status, 200, 'another caller behind the same IP has its own budget')
-      assert.equal((await get('198.51.100.21', 'id_token=alice')).status, 429, 'the same caller from another IP shares its budget')
-    } finally { config.defaultLimits.apiRate!.nb = before }
-  })
   it('lists catalog and the grid umbrellas in the registry', async () => {
     const reg: any = await (await fetch(`${base}/mcp-server/v0/servers`, { headers: PROXY })).json()
     assert.deepEqual(reg.servers.map((s: any) => s.server.name), ['fr.data-fair/catalog', 'fr.data-fair/read', 'fr.data-fair/write', 'fr.data-fair/manage'])
     assert.equal(reg.servers[0].server.remotes[0].url, 'https://portal.test/mcp-server/mcp?profiles=catalog')
-  })
-  it('caps made-up identities from one IP under a per-IP ceiling', async () => {
-    const before = config.defaultLimits.apiRate!.nb
-    config.defaultLimits.apiRate!.nb = 1
-    try {
-      const statuses: number[] = []
-      for (let i = 0; i < 15; i++) {
-        statuses.push((await fetch(`${base}/mcp-server/v0/servers`, { headers: { ...PROXY, 'x-forwarded-for': '198.51.100.30', cookie: `id_token=junk${i}` } })).status)
-      }
-      assert.ok(statuses.includes(429), `a fresh cookie per request must not escape the limiter (${statuses.join(',')})`)
-    } finally { config.defaultLimits.apiRate!.nb = before }
-  })
-  it('keeps a user in one budget whatever their unrelated cookies', async () => {
-    const before = config.defaultLimits.apiRate!.nb
-    config.defaultLimits.apiRate!.nb = 1
-    try {
-      const get = (cookie: string) => fetch(`${base}/mcp-server/v0/servers`, { headers: { ...PROXY, 'x-forwarded-for': '198.51.100.31', cookie } })
-      assert.equal((await get('id_token=carol; consent=1')).status, 200)
-      assert.equal((await get('id_token=carol; consent=2')).status, 429)
-    } finally { config.defaultLimits.apiRate!.nb = before }
-  })
-  it('limits in-cluster callers too', async () => {
-    const before = config.defaultLimits.apiRate!.nb
-    config.defaultLimits.apiRate!.nb = 1
-    try {
-      const get = () => fetch(`${base}/v0/servers`, { headers: { cookie: 'id_token=dave' } })
-      assert.equal((await get()).status, 200)
-      assert.equal((await get()).status, 429)
-    } finally { config.defaultLimits.apiRate!.nb = before }
   })
   it('answers an undeclared profile with a 400 naming it', async () => {
     const res = await fetch(`${base}/mcp-server/mcp?profiles=catalog,nope`, { method: 'POST', headers: { ...PROXY, 'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'c', version: '0' } } }) })

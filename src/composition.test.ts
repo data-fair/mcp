@@ -90,7 +90,7 @@ describe('composition', () => {
       assert.ok(tool.inputSchema.properties.file['x-mcp-file'])
       const { siteFetch } = await import('./site-fetch.ts')
       const res = await tool.execute({ file: `${storeOrigin}/agent-files/report.csv?X-Amz-Signature=sig`, title: 'Report' }, {
-        fetch: siteFetch(site.origin, { mainSiteUrl: site.origin, dispatcher, ignoreRateLimiting: 'secret' }),
+        fetch: siteFetch(site.origin, { mainSiteUrl: site.origin, dispatcher, trustedForwarder: 'secret' }),
         headers: { cookie: 'id_token=abc', 'x-apikey': 'key' }
       })
       assert.equal(res.isError, undefined, res.text)
@@ -101,7 +101,7 @@ describe('composition', () => {
       assert.match(upload.body.toString(), /filename="report.csv"/)
       assert.match(upload.body.toString(), /a,b\n1,2\n/)
       assert.equal(storeHeaders.length, 1)
-      for (const name of ['cookie', 'x-apikey', 'x-ignore-rate-limiting', 'authorization']) assert.equal(storeHeaders[0][name], undefined, `${name} never reaches the file store`)
+      for (const name of ['cookie', 'x-apikey', 'x-trusted-forwarder', 'authorization']) assert.equal(storeHeaders[0][name], undefined, `${name} never reaches the file store`)
     } finally {
       withFiles.close()
       store.close()

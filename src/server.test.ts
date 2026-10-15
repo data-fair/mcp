@@ -22,7 +22,7 @@ describe('server: createRuntime', () => {
       mainSiteUrl: site.origin,
       portalUrl: undefined,
       refreshInterval: 0,
-      ignoreRateLimiting: undefined,
+      trustedForwarder: undefined,
       // the site itself stands in for the in-cluster proxy: what matters here is that the
       // dispatcher DOES resolve through it (proving createRuntime wired the option through),
       // not what is on the other end of it
@@ -54,7 +54,7 @@ describe('server: createRuntime', () => {
       mainSiteUrl: undefined,
       portalUrl: site.origin,
       refreshInterval: 0,
-      ignoreRateLimiting: undefined,
+      trustedForwarder: undefined,
       upstreamProxyHost: undefined,
       extraTools: { geocodeAddress: { active: false, profiles: [] } }
     })

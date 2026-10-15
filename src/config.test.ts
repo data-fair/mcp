@@ -12,7 +12,7 @@ describe('config', () => {
     assert.equal((config as any).mode, undefined, 'one published server: no mode')
     assert.equal((config as any).publicProfiles, undefined)
     assert.equal(config.upstreamProxyHost, undefined)
-    assert.deepEqual(config.extraTools, { geocodeAddress: { active: true, profiles: ['catalog'] } })
+    assert.deepEqual(config.extraTools, { geocodeAddress: { active: true, profiles: ['catalog'], limits: { global: { nb: 40, duration: 1 }, perCaller: { nb: 10, duration: 1 } } } })
     assert.equal(config.observer.port, 9090)
     assert.deepEqual(config.files, { urlPrefixes: [] })
   })

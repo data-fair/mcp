@@ -28,9 +28,9 @@ if (config.transport === 'http') {
   // a local server may sit behind a forward proxy (nhi-proxy…); its CA comes through NODE_EXTRA_CA_CERTS
   const forwardProxy = process.env.HTTPS_PROXY ?? process.env.https_proxy ?? process.env.HTTP_PROXY ?? process.env.http_proxy
   const dispatcher = createDispatcher({ mainSiteUrl, forwardProxy: forwardProxy || undefined, timeoutMs: 30_000 })
-  // stdio sends no rate-limit bypass secret to the site it composes over (spec §4): a
-  // deployment sharing config.ignoreRateLimiting with a stack sibling must not leak it here.
-  const composition = await createComposition({ config: { ...config, ignoreRateLimiting: undefined }, dispatcher, mainSiteUrl })
+  // stdio sends no forwarder secret to the site it composes over (spec §4): a deployment sharing
+  // config.trustedForwarder with a stack sibling must not leak it here.
+  const composition = await createComposition({ config: { ...config, trustedForwarder: undefined }, dispatcher, mainSiteUrl })
   const profiles = (process.env.PROFILES ?? 'catalog').split(',').map(s => s.trim()).filter(Boolean)
   const { siteFetch } = await import('./src/site-fetch.ts')
   const headers = config.dataFairAPIKey ? { 'x-apikey': config.dataFairAPIKey } : undefined

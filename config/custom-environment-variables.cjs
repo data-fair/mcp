@@ -6,13 +6,7 @@ module.exports = {
   locale: 'LOCALE',
   portalUrl: 'PORTAL_URL',
   dataFairAPIKey: 'DATA_FAIR_API_KEY',
-  ignoreRateLimiting: 'IGNORE_RATE_LIMITING',
-  defaultLimits: {
-    apiRate: {
-      duration: 'DEFAULT_LIMITS_API_RATE_DURATION',
-      nb: 'DEFAULT_LIMITS_API_RATE_NB'
-    }
-  },
+  trustedForwarder: 'TRUSTED_FORWARDER',
   observer: {
     active: 'OBSERVER_ACTIVE',
     port: 'OBSERVER_PORT'
@@ -28,7 +22,8 @@ module.exports = {
   extraTools: {
     geocodeAddress: {
       active: { __name: 'EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE', __format: 'json' },
-      profiles: 'EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES'
+      profiles: 'EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES',
+      limits: { __name: 'EXTRA_TOOLS_GEOCODE_ADDRESS_LIMITS', __format: 'json' }
     }
   },
   // FILE_URL_PREFIXES: a comma-separated list, split by normalizeLists in src/config.ts

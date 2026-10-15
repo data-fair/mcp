@@ -26,9 +26,9 @@ export interface Composition {
   close (): void
 }
 
-export async function createComposition (options: { config: Pick<ApiConfig, 'locale' | 'indexPath' | 'refreshInterval' | 'extraTools' | 'files' | 'ignoreRateLimiting'>, dispatcher: SiteDispatcher, mainSiteUrl: string }): Promise<Composition> {
+export async function createComposition (options: { config: Pick<ApiConfig, 'locale' | 'indexPath' | 'refreshInterval' | 'extraTools' | 'files' | 'trustedForwarder'>, dispatcher: SiteDispatcher, mainSiteUrl: string }): Promise<Composition> {
   const { config, dispatcher, mainSiteUrl } = options
-  const fetchFn = siteFetch(mainSiteUrl, { mainSiteUrl, dispatcher, ignoreRateLimiting: config.ignoreRateLimiting })
+  const fetchFn = siteFetch(mainSiteUrl, { mainSiteUrl, dispatcher, trustedForwarder: config.trustedForwarder })
   // a malformed prefix throws here, at boot: left to the composer it would only mark the whole service as errored
   createFileFetcher(fileOptions(config.files))
   const composer = await createComposer(`${mainSiteUrl}${config.indexPath}`, {
@@ -41,7 +41,7 @@ export async function createComposition (options: { config: Pick<ApiConfig, 'loc
   })
   for (const s of composer.services) if (s.status !== 'ok') console.warn(`service ${s.id}: ${s.status}${s.reason ? ` — ${s.reason}` : ''}`)
 
-  const geocode = config.extraTools.geocodeAddress.active ? geocodeAddressTool({ locale: config.locale as 'en' | 'fr' }) : undefined
+  const geocode = config.extraTools.geocodeAddress.active ? geocodeAddressTool({ locale: config.locale as 'en' | 'fr', limits: config.extraTools.geocodeAddress.limits }) : undefined
   // Structured content, but no output schema: the response schemas of the composed documents
   // cannot be honoured exactly (README, "Structured results").
   const withExtras = (toolSet: ToolSet): ToolSet => {

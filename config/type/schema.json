@@ -14,7 +14,6 @@
   "title": "Api config",
   "required": [
     "locale",
-    "defaultLimits",
     "observer",
     "port",
     "transport",
@@ -39,30 +38,9 @@
       "type": "string",
       "description": "API key sent to Data Fair for authentication. Used in standalone mode."
     },
-    "ignoreRateLimiting": {
+    "trustedForwarder": {
       "type": "string",
-      "description": "Secret key sent to Data Fair to bypass rate limiting constraints. Used in stack mode."
-    },
-    "defaultLimits": {
-      "type": "object",
-      "description": "Default rate limiting configuration for the MCP server front-facing API.",
-      "properties": {
-        "apiRate": {
-          "type": "object",
-          "properties": {
-            "duration": {
-              "type": "number",
-              "description": "Duration of the rate limiting window in seconds.",
-              "default": 60
-            },
-            "nb": {
-              "type": "number",
-              "description": "Maximum number of requests allowed per duration window.",
-              "default": 100
-            }
-          }
-        }
-      }
+      "description": "Secret sent to the ingress (X-Trusted-Forwarder) with the caller's IP in X-Forwarded-For, or with none for a caller acting for no address. Used in stack mode."
     },
     "observer": {
       "type": "object",
@@ -95,7 +73,17 @@
           "required": ["active", "profiles"],
           "properties": {
             "active": { "type": "boolean", "default": true },
-            "profiles": { "type": "array", "items": { "type": "string" }, "default": ["catalog"], "description": "The tool joins the set when the request's profiles intersect this list." }
+            "profiles": { "type": "array", "items": { "type": "string" }, "default": ["catalog"], "description": "The tool joins the set when the request's profiles intersect this list." },
+            "limits": {
+              "type": "object",
+              "description": "Calls to IGN: a global budget per instance (IGN allows 50 requests per second per source IP, divide by replicas) and a per-caller one, so no caller fills the global one.",
+              "required": ["global", "perCaller"],
+              "default": { "global": { "nb": 40, "duration": 1 }, "perCaller": { "nb": 10, "duration": 1 } },
+              "properties": {
+                "global": { "type": "object", "required": ["nb", "duration"], "properties": { "nb": { "type": "number", "exclusiveMinimum": 0, "description": "Requests allowed per duration." }, "duration": { "type": "number", "exclusiveMinimum": 0, "description": "Window in seconds." } } },
+                "perCaller": { "type": "object", "required": ["nb", "duration"], "properties": { "nb": { "type": "number", "exclusiveMinimum": 0, "description": "Requests allowed per duration." }, "duration": { "type": "number", "exclusiveMinimum": 0, "description": "Window in seconds." } } }
+              }
+            }
           }
         }
       }

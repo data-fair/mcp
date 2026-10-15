@@ -5,6 +5,8 @@
  * config.extraTools.geocodeAddress. No data-fair identity is involved.
  */
 import type { Tool, ToolResult } from '@data-fair/openapi-mcp'
+import { ipRateLimitKey } from '@data-fair/lib-express/req-origin.js'
+import { createGeocodeLimits, type GeocodeLimits } from './geocode-limits.ts'
 
 const DEFAULT_BASE = 'https://data.geopf.fr/geocodage/search'
 const TIMEOUT_MS = 30_000
@@ -49,8 +51,9 @@ export function formatResult (data: any, params: { q: string }): { text: string,
   return { text, structuredContent: { count: results.length, results } }
 }
 
-export function geocodeAddressTool (options: { fetch?: typeof fetch, base?: string, locale?: 'en' | 'fr' } = {}): Tool {
+export function geocodeAddressTool (options: { fetch?: typeof fetch, base?: string, locale?: 'en' | 'fr', limits?: GeocodeLimits } = {}): Tool {
   const fetchFn = options.fetch ?? globalThis.fetch
+  const take = options.limits ? createGeocodeLimits(options.limits) : undefined
   return {
     name: 'geocode_address',
     title: titles[options.locale ?? 'en'],
@@ -64,12 +67,18 @@ export function geocodeAddressTool (options: { fetch?: typeof fetch, base?: stri
       required: ['q']
     },
     annotations: { readOnlyHint: true, openWorldHint: true },
-    async execute (params): Promise<ToolResult> {
+    async execute (params, ctx): Promise<ToolResult> {
       let url: string
       try {
         url = buildUrl(params as unknown as Params, options.base)
       } catch (err: any) {
         return { isError: true, text: err.message }
+      }
+      // the caller: its identity (session cookie or API key hash), else its forwarded IP (an IPv6 one as its /64)
+      const ip = ctx?.headers?.['x-forwarded-for']
+      const taken = take?.(ctx?.identity ?? (ip ? ipRateLimitKey(ip) : undefined))
+      if (taken && !taken.ok) {
+        return { isError: true, text: taken.retryAfterSeconds ? `Geocoding refused: ${taken.reason}. The geocoder is busy; retry in ${taken.retryAfterSeconds} s.` : `Geocoding refused: ${taken.reason}.` }
       }
       try {
         const res = await fetchFn(url, { signal: AbortSignal.timeout(TIMEOUT_MS) })

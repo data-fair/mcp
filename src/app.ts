@@ -5,7 +5,6 @@ import { createMcpHttpHandler } from '@data-fair/openapi-mcp/adapters/mcp'
 import type { ToolSet } from '@data-fair/openapi-mcp'
 import { toNodeHandler } from '@modelcontextprotocol/node'
 import config from '#config'
-import { rateLimitingMiddleware } from './rate-limiting.ts'
 import { requestContext, siteOriginOf } from './context.ts'
 import { linksOnSite } from './site-links.ts'
 import { aiCatalogDocument, registryDocument, profilesDocument } from './registry.ts'
@@ -35,9 +34,10 @@ export function createApp (composition: Composition, dispatcher: SiteDispatcher)
 
   app.use(createSiteMiddleware('mcp-server'))
 
-  // One published server (parity: our agents reach it like any other client), limited per
-  // caller on every route; see data-fair docs/architecture/agent-rate-limiting.md.
-  const limiter = [rateLimitingMiddleware]
+  // One published server (parity: our agents reach it like any other client), with no rate limiting
+  // of its own: nginx limits callers on the way in and data-fair every tool call it serves, by user or
+  // by the IP forwarded here; only the geocoder, which calls IGN, is limited (data-fair
+  // docs/architecture/agent-rate-limiting.md).
 
   // CORS for browser-based MCP clients, on the MCP routes only.
   const cors = (req: Request, res: Response, next: NextFunction) => {
@@ -66,24 +66,24 @@ export function createApp (composition: Composition, dispatcher: SiteDispatcher)
   const alias = createMcpHttpHandler((request) => composition.alias().then(onSite(request)), { name: 'datafair-datasets-mcp-server', version }, options)
   composition.composer.onChange(() => { for (const h of [main, alias]) { h.notify.toolsChanged(); h.notify.resourcesChanged() } })
 
-  app.all('/mcp', cors, ...limiter, knownProfiles, toNodeHandler(main))
-  app.all('/datasets/mcp', cors, ...limiter, toNodeHandler(alias))
+  app.all('/mcp', cors, knownProfiles, toNodeHandler(main))
+  app.all('/datasets/mcp', cors, toNodeHandler(alias))
 
-  app.get('/v0/servers', ...limiter, (req, res) => {
+  app.get('/v0/servers', (req, res) => {
     cacheable(res)
     res.json(registryDocument({ composer: composition.composer, siteOrigin: siteOf(req), version, locale: config.locale }))
   })
-  app.get('/profiles', ...limiter, (req, res) => {
+  app.get('/profiles', (req, res) => {
     cacheable(res)
     res.json(profilesDocument(composition.composer))
   })
-  app.get('/ai-catalog.json', ...limiter, (req, res) => {
+  app.get('/ai-catalog.json', (req, res) => {
     cacheable(res)
     res.set('Access-Control-Allow-Origin', '*')
     res.type('application/ai-catalog+json')
     res.send(JSON.stringify(aiCatalogDocument({ composer: composition.composer, siteOrigin: siteOf(req), version }), null, 2))
   })
-  app.get('/status', ...limiter, (req, res) => {
+  app.get('/status', (req, res) => {
     assertReqInternal(req)
     res.json({ mainSiteUrl: config.mainSiteUrl, services: composition.composer.services, profiles: composition.composer.profiles().map(p => p.name), lastRefresh: composition.lastRefresh(), extraTools: config.extraTools })
   })
