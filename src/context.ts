@@ -32,9 +32,9 @@ export function siteOriginOf (source: Request | Headers | undefined, mainSiteUrl
   return (headers && originFromForwarded(headers)) ?? mainSiteUrl
 }
 
-/** Who a caller is, as far as its credentials say: a hash of its cookie, else of its API key. */
-export function credentialIdentity (credentials: { cookie?: string | null, apiKey?: string | null }): string | undefined {
-  const secret = credentials.cookie || credentials.apiKey
+/** Who a caller is, as far as its credentials say: a hash of its cookie, else of its bearer authorization, else of its API key. */
+export function credentialIdentity (credentials: { cookie?: string | null, authorization?: string | null, apiKey?: string | null }): string | undefined {
+  const secret = credentials.cookie || credentials.authorization || credentials.apiKey
   return secret ? createHash('sha256').update(secret).digest('hex') : undefined
 }
 
@@ -45,8 +45,10 @@ export function requestContext (options: { config: Pick<ApiConfig, 'mainSiteUrl'
     const siteOrigin = siteOriginOf(request, config.mainSiteUrl!)
     const forwarded: Record<string, string> = {}
     const cookie = headers.get('cookie')
+    const authorization = headers.get('authorization')
     const apiKey = headers.get('x-apikey') ?? headers.get('x-api-key')
     if (cookie) forwarded.cookie = cookie
+    if (authorization) forwarded.authorization = authorization
     if (apiKey) forwarded['x-apikey'] = apiKey
     // the caller's IP, forwarded so the stack limits it as if it called directly; none for a caller
     // acting for nobody's address (a planned task), which the stack then limits by its identity
@@ -55,7 +57,7 @@ export function requestContext (options: { config: Pick<ApiConfig, 'mainSiteUrl'
     return {
       fetch: siteFetch(siteOrigin, { mainSiteUrl: config.mainSiteUrl!, dispatcher, trustedForwarder: config.trustedForwarder }),
       headers: Object.keys(forwarded).length ? forwarded : undefined,
-      identity: credentialIdentity({ cookie, apiKey })
+      identity: credentialIdentity({ cookie, authorization, apiKey })
     }
   }
 }

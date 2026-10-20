@@ -43,9 +43,9 @@ describe('context', () => {
     assert.equal(typeof ctx.fetch, 'function')
     assert.equal(ctx.headers, undefined)
   })
-  it('forwards the cookie and API key, hashes them into an identity, and nothing else', () => {
-    const ctx = ctxOf({ cookie: 'id_token=abc', 'x-api-key': 'k', authorization: 'Bearer nope', 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https' })
-    assert.deepEqual(ctx.headers, { cookie: 'id_token=abc', 'x-apikey': 'k' })
+  it('forwards the cookie, authorization and API key, hashes the cookie into an identity, and nothing else', () => {
+    const ctx = ctxOf({ cookie: 'id_token=abc', 'x-api-key': 'k', authorization: 'Bearer nope', 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https', 'x-other': 'o' })
+    assert.deepEqual(ctx.headers, { cookie: 'id_token=abc', authorization: 'Bearer nope', 'x-apikey': 'k' })
     assert.equal(ctx.identity, createHash('sha256').update('id_token=abc').digest('hex'))
     assert.equal(typeof ctx.fetch, 'function')
   })
@@ -53,6 +53,14 @@ describe('context', () => {
     const ctx = ctxOf({})
     assert.equal(ctx.headers, undefined)
     assert.equal(ctx.identity, undefined)
+  })
+  it('forwards a bearer authorization', () => {
+    assert.equal(ctxOf({ authorization: 'Bearer t' }).headers?.authorization, 'Bearer t')
+  })
+  it('identifies a bearer-only caller, apart from an API-key caller', () => {
+    const bearer = ctxOf({ authorization: 'Bearer t' }).identity
+    assert.ok(bearer)
+    assert.notEqual(bearer, ctxOf({ 'x-apikey': 't' }).identity)
   })
   it('accepts x-apiKey in either spelling', () => {
     assert.equal(ctxOf({ 'x-apikey': 'k2' }).headers!['x-apikey'], 'k2')

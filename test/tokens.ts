@@ -16,12 +16,16 @@ export const jwks = (): { session: object, scoped: object } => ({
   scoped: jwkSet(scopedKeys.publicKey, 'scoped-sd-1')
 })
 
-const sign = (privateKey: KeyObject, kid: string, payload: object, header: object = {}) =>
-  jwt.sign(payload, privateKey, { algorithm: 'RS256', expiresIn: '5m', keyid: kid, header: { alg: 'RS256', ...header } })
+const sign = (privateKey: KeyObject, kid: string, payload: object, header: object = {}, expiresIn: jwt.SignOptions['expiresIn'] = '5m') =>
+  jwt.sign(payload, privateKey, { algorithm: 'RS256', expiresIn, keyid: kid, header: { alg: 'RS256', ...header } })
 
-/** A session cookie header value: the token split in `id_token` and `id_token_sign`. */
-export function cookieFor (payload: object): string {
-  const [h, p, s] = sign(sessionKeys.privateKey, 'sd-1', payload).split('.')
+/**
+ * A session cookie header value: the token split in `id_token` and `id_token_sign`. A payload
+ * carrying a scope is signed by the scoped key set, as the directory signs a scoped session.
+ */
+export function cookieFor (payload: object, options: { expiresIn?: jwt.SignOptions['expiresIn'] } = {}): string {
+  const [privateKey, kid] = 'scope' in payload ? [scopedKeys.privateKey, 'scoped-sd-1'] : [sessionKeys.privateKey, 'sd-1']
+  const [h, p, s] = sign(privateKey, kid, payload, {}, options.expiresIn).split('.')
   return `id_token=${h}.${p}; id_token_sign=${s}`
 }
 
