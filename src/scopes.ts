@@ -7,6 +7,7 @@
 import type { IncomingMessage } from 'node:http'
 import type { RequestHandler } from 'express'
 import { session, markScopeChecked, httpError } from '@data-fair/lib-express'
+import { siteFetch, type SiteDispatcher } from './site-fetch.ts'
 
 export const SCOPES_HEADER = 'x-mcp-scopes'
 
@@ -57,4 +58,18 @@ export function credentials (options: { required: boolean, mainSiteUrl: string }
 export function scopesOf (request: Request | undefined): string[] | undefined {
   const header = request?.headers.get(SCOPES_HEADER)
   return header ? JSON.parse(header) : undefined
+}
+
+/**
+ * The stdio caller's session: an API key is the identity (data-fair checks it per call, no
+ * scopes to read); otherwise the main site's my-session answers for whatever the environment
+ * injects (a proxy adding a session). No forwarder secret is sent.
+ */
+export async function stdioSession (options: { mainSiteUrl: string, dispatcher: SiteDispatcher, apiKey?: string }): Promise<{ authenticated: boolean, scopes?: string[] }> {
+  if (options.apiKey) return { authenticated: true }
+  const fetch = siteFetch(options.mainSiteUrl, { mainSiteUrl: options.mainSiteUrl, dispatcher: options.dispatcher })
+  const res = await fetch(`${options.mainSiteUrl}/simple-directory/api/auth/my-session`)
+  if (!res.ok) return { authenticated: false }
+  const body = await res.json() as { user?: unknown, scopes?: string[] }
+  return body.user ? { authenticated: true, scopes: body.scopes } : { authenticated: false }
 }

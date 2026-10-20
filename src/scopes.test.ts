@@ -5,7 +5,8 @@ import express from 'express'
 import { session } from '@data-fair/lib-express'
 import { startFakeSite, type FakeSite } from '../test/fake-site.ts'
 import { bearerFor, cookieFor, nhiClaims, USER } from '../test/tokens.ts'
-import { credentials, scopesOf, SCOPES_HEADER } from './scopes.ts'
+import { credentials, scopesOf, stdioSession, SCOPES_HEADER } from './scopes.ts'
+import { createDispatcher } from './site-fetch.ts'
 
 const FORWARDED = { 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https', 'x-forwarded-for': '203.0.113.7' }
 const ONE_ORG = { ...USER, organizations: [USER.organizations[0]] }
@@ -119,5 +120,26 @@ describe('scopesOf', () => {
     assert.deepEqual(scopesOf(new Request('http://x', { headers: { [SCOPES_HEADER]: '["a","b"]' } })), ['a', 'b'])
     assert.equal(scopesOf(new Request('http://x')), undefined)
     assert.equal(scopesOf(undefined), undefined)
+  })
+})
+
+describe('stdioSession', () => {
+  let site: FakeSite
+  before(async () => { site = await startFakeSite() })
+  after(async () => { await site.close() })
+  const options = () => ({ mainSiteUrl: site.origin, dispatcher: createDispatcher({ mainSiteUrl: site.origin }) })
+
+  it('takes an API key as authenticated without a request', async () => {
+    const hits = site.hits.length
+    assert.deepEqual(await stdioSession({ ...options(), apiKey: 'k' }), { authenticated: true })
+    assert.equal(site.hits.length, hits)
+  })
+  it('reads the scopes of the session the site reports', async () => {
+    site.setSession({ user: USER, scopes: ['datasets:read'] })
+    assert.deepEqual(await stdioSession(options()), { authenticated: true, scopes: ['datasets:read'] })
+  })
+  it('is unauthenticated when the site reports no user', async () => {
+    site.setSession({})
+    assert.deepEqual(await stdioSession(options()), { authenticated: false })
   })
 })
