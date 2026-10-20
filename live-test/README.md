@@ -24,7 +24,7 @@ cp .env.example .env
 
 Paste nhi-proxy's `Other tools: HTTPS_PROXY=… NODE_EXTRA_CA_CERTS=…` line in place of the two
 lines of the same names (as is, `~` included), and set the platform nhi-proxy logs into, the
-profiles and the image tag. Then, so the first start is not a download:
+server (`DF_MCP_SERVER`) and the image tag. Then, so the first start is not a download:
 
 ```sh
 docker pull ghcr.io/data-fair/mcp:feat-openapi-mcp
@@ -43,14 +43,15 @@ opencode
 
 Then ask: "run the live test". The agent follows `AGENTS.md` and writes its report to `reports/`.
 
-To test other profiles (`write`, `manage`, silos such as `read_metrics`…), change `DF_PROFILES`
-in `.env` and restart the agent. The protocol never calls a write tool without asking you first.
+The live test runs the platform server (`DF_MCP_SERVER=platform`, passed to the image as `MCP_SERVER`), whose tools are those the NHI's
+scopes allow; to test another NHI, log nhi-proxy into it and restart the agent. For the datasets
+server, set `DF_MCP_SERVER=datasets` in `.env`. The protocol never calls a write tool without asking you first.
 
 ## Troubleshooting
 
 - **Server fails to start:** run `./run-mcp.sh` by hand, its stderr says what is missing or which
   services failed to load.
 - **`unable to verify the first certificate`:** `NODE_EXTRA_CA_CERTS` is not the CA of the running
-  profile.
+  nhi-proxy.
 - **Account tools return 401 or nothing:** the requests do not go through nhi-proxy, or its session
   is not for `DF_PORTAL_URL`; nhi-proxy's own log shows whether it saw them.

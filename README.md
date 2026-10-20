@@ -7,21 +7,19 @@ Part of the [Data Fair](https://datafair.cloud) ecosystem.
 
 ## What it serves
 
-This server composes the tools of the deployment's index — every service that publishes an
-annotated OpenAPI document (`x-agent` operations) is discovered through
-`GET /data-fair/api/v1/agents/index.json` and turned into MCP tools by
-[`@data-fair/openapi-mcp`](https://github.com/data-fair/openapi-mcp), grouped by profile:
+Two MCP servers over data-fair's merged platform OpenAPI document
+(`GET /data-fair/api/v1/platform/api-docs.json`, annotated with `x-agent`), turned into tools by
+[`@data-fair/openapi-mcp`](https://github.com/data-fair/openapi-mcp). The document is kept live:
+re-fetched conditionally on an interval, and clients are notified when the tools change.
 
-- `catalog` — what a portal publishes, in its end-user form: the default set;
-- the `read` / `write` / `manage` grid per resource family (`read_datasets`, `write_portals`…),
-  with the umbrellas `read`, `write`, `manage` — see data-fair's
-  `docs/architecture/agent-profiles.md`;
+- the **platform server** — every tool of the document, cut down to what the caller's token scopes
+  allow (`toolsForScopes`). Always authenticated; tool names carry the `datafair_` prefix;
+- the **datasets server** — the published catalog's six tools under the names earlier clients
+  hard-coded (see Compatibility). Anonymous callers allowed.
 
-It also serves `geocode_address` (an IGN geocoder, the one hand-written tool — no service
-document describes it; it joins `catalog` sets) and a compatibility route,
-`/mcp-server/datasets/mcp`, that keeps the seven tool names earlier clients hard-coded, on
-data-fair's catalog tools. Nothing here declares a tool's name or schema: those
-come from the services' documents, refreshed on an interval.
+Both also serve `geocode_address` (an IGN geocoder, the one hand-written tool — no service
+document describes it), whatever the scopes. Nothing here declares a tool's name or schema:
+those come from the platform document.
 
 ## Standalone (Docker, stdio)
 
@@ -31,8 +29,13 @@ clients (e.g., Claude Desktop, VS Code).
 
 - `PORTAL_URL` is **required** — set it to the base URL of the Data Fair portal you want to query.
 - `DATA_FAIR_API_KEY` — optional API key for authenticating requests to the Data Fair instance.
-- `PROFILES` — optional, comma-separated list of profiles to compose (default `catalog`).
+- `MCP_SERVER` — `datasets` (default: the seven historic tool names) or `platform` (the `datafair_` tools the credentials allow). `platform` needs credentials and exits at startup without any.
 - `HTTPS_PROXY` — optional forward proxy every call tunnels through (e.g. an identity-injecting proxy such as `@data-fair/nhi-proxy`); a TLS-intercepting proxy's CA goes in `NODE_EXTRA_CA_CERTS`.
+
+With an API key the tools are not filtered (data-fair checks the key on every call). Otherwise, at
+startup the server asks `<PORTAL_URL>/simple-directory/api/auth/my-session` who the environment
+injects (a proxy adding a session), and the scopes of that session cut the tool list for the life
+of the process.
 
 ```json
 {
@@ -45,16 +48,19 @@ clients (e.g., Claude Desktop, VS Code).
 }
 ```
 
-Tool names carry the `datafair_` prefix since 1.0 (e.g. `datafair_list_datasets`).
-
 ## Stack deployment (HTTP)
 
 Deploy the MCP server as a web service alongside Data Fair in the same infrastructure
 stack, using the **http** transport (`TRANSPORT=http`), published through the ingress at
 `/mcp-server/`. There is one deployment for every caller — external MCP clients and the agents
-service alike (parity: our own agents get no surface another agent cannot reach). Every declared
-profile is available to every caller; what a caller may actually do is data-fair's permissions
-on the identity it forwards (cookie or API key).
+service alike (parity: our own agents get no surface another agent cannot reach).
+
+Credentials are the caller's cookie session, a bearer access token or an API key, forwarded to
+data-fair on every call, whose permissions are the boundary. Cookie and bearer sessions are
+verified through `@data-fair/lib-express` against the directory (the server never decodes a JWT
+itself) and their scopes filter the platform server's tools; a session without scopes and an API
+key see every tool. A request without forwarded headers (an in-cluster caller) is read with the
+main site as its site.
 
 This server has no general rate limiting of its own. nginx limits callers on the way in, and every
 tool call that costs anything is a data-fair call, limited there by the caller's identity or by the IP
@@ -65,12 +71,10 @@ exception is `geocode_address`, which calls IGN: a global budget per instance an
 
 Routes:
 
-- `POST /mcp?profiles=` — the composed set for the requested profiles (default `catalog`), plus extra tools; an undeclared profile is refused
-- `POST /datasets/mcp` — the compatibility alias (see below); `?profiles=` is ignored
-- `GET /v0/servers` — an [MCP Registry API](https://github.com/modelcontextprotocol/registry) document listing `catalog`, `read`, `write` and `manage` (the cells stay selectable by name)
-- `GET /profiles` — the whole profile vocabulary (name, title, description, includes), for hosts that let an author choose profiles (the agents service's `profilesUrl`)
-- `GET /mcp-server/ai-catalog.json` — the site's AI Catalog (MCP Server Card of the `catalog` profile); route `/.well-known/ai-catalog.json` of every site host here
-- `GET /status` — services, last refresh time, active extra tools; in-cluster callers only
+- `POST /mcp` — the platform server; `401` without credentials, and for a cookie or bearer that does not verify
+- `POST /datasets/mcp` — the datasets server (see Compatibility). A cookie or bearer that does not verify is dropped, not forwarded, and the caller served anonymously; valid credentials are forwarded and their scopes filter the six tools
+- `GET /ai-catalog.json` — the site's AI Catalog (the MCP Server Card of the datasets server); route `/.well-known/ai-catalog.json` of every site host here
+- `GET /status` — services of the platform document, last refresh time, datasets tools missing from the document, active extra tools; in-cluster callers only
 
 ## Environment variables
 
@@ -84,17 +88,17 @@ Routes:
 | `PORT`                | Port for the HTTP server to listen on.                                                                                                                                   | `8080`  | stack only         |
 | `OBSERVER_ACTIVE`     | Enable Prometheus metrics.                                                                                                                                               | `true`  | stack only         |
 | `OBSERVER_PORT`       | Port for the Prometheus metrics observer.                                                                                                                                | `9090`  | stack only         |
-| `MAIN_SITE_URL`       | Origin of the main site. The index and every document are fetched from it; upstream calls swap it for the requesting site's origin. Falls back to `PORTAL_URL` in stdio.| —       | stack only         |
-| `INDEX_PATH`          | Path of the deployment's agent index on the main site.                                                                                                                   | `/data-fair/api/v1/agents/index.json` | stack only |
-| `REFRESH_INTERVAL`    | Seconds between conditional re-fetches of the index and documents; `0` disables.                                                                                         | `300`   | stack only         |
+| `MAIN_SITE_URL`       | Origin of the main site. The platform document is fetched from it; upstream calls swap it for the requesting site's origin. Falls back to `PORTAL_URL` in stdio.| —       | stack only         |
+| `DOC_PATH`            | Path of the platform OpenAPI document on the main site.                                                                                                                  | `/data-fair/api/v1/platform/api-docs.json` | standalone/stack |
+| `PRIVATE_DIRECTORY_URL` | In-cluster URL of simple-directory, used to verify sessions.                                                                                                           | `http://simple-directory:8080` | stack only |
+| `MCP_SERVER`          | Which server stdio serves: `datasets` or `platform`.                                                                                                                     | `datasets` | standalone      |
+| `REFRESH_INTERVAL`    | Seconds between conditional re-fetches of the platform document and its skills; `0` disables.                                                                                         | `300`   | stack only         |
 | `UPSTREAM_PROXY_HOST` | Optional in-cluster reverse proxy (`host` or `host:port`, or a bracketed IPv6 literal such as `[::1]:8080`) every site host resolves to, skipping public DNS and the outer proxy hop. | —       | stack only         |
 | `FILE_URL_PREFIXES`   | Comma-separated URL prefixes of the agents' file store (endpoint and bucket path, e.g. `https://s3.example.com/agents/`); the only URLs a file input is fetched from. Unset: tools that need a file are not offered. | — | standalone/stack |
 | `FILE_MAX_SIZE`       | Largest file accepted, in bytes. | `104857600` | standalone/stack |
 | `FILE_TIMEOUT`        | Seconds from the request to the last byte of a file. | `300` | standalone/stack |
-| `EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE` | JSON boolean; whether `geocode_address` is composed at all, e.g. `EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE=false`.                                             | `true`  | standalone/stack   |
-| `EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES` | The profiles `geocode_address` joins, as a JSON array or a comma-separated list, e.g. `'["catalog"]'` or `catalog`. | `["catalog"]` | standalone/stack |
+| `EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE` | JSON boolean; whether `geocode_address` is served at all, e.g. `EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE=false`.                                             | `true`  | standalone/stack   |
 | `EXTRA_TOOLS_GEOCODE_ADDRESS_LIMITS` | JSON: `{ "global": { "nb", "duration" }, "perCaller": { "nb", "duration" } }`, calls to IGN per instance and per caller (IGN allows 50 requests per second per source IP: divide by replicas). | 40/s, 10/s | standalone/stack |
-| `PROFILES`            | Comma-separated list of profiles to compose.                                                                                                                             | `catalog` | standalone       |
 
 ## Files and structured results
 
@@ -114,14 +118,14 @@ Tools that return a file (downloads, exports) send no request: they return an MC
 [`resource_link`](https://modelcontextprotocol.io/specification/latest/server/tools) that the
 client fetches with its own credentials, so no file crosses this server in either direction.
 
-A link is built on the main site's URL, where the tools were composed; this server moves it onto
+A link is built on the main site's URL, where the tools were built; this server moves it onto
 the site the call came through (`X-Forwarded-Host`), as `siteFetch` does for every request, so a
 caller on a portal receives a portal URL. An in-cluster caller without forwarded headers gets the
 main site's.
 
 **Structured results.** Tool results carry the parsed JSON response as `structuredContent` (the
 agents service's code mode works on it); the text block stays what a model reads. No tool
-publishes an `outputSchema`, which MCP leaves optional. Measured against data-fair's document
+publishes an `outputSchema`, which MCP leaves optional. Measured against data-fair's platform document
 (2026-10-13), a client that validates results — the TypeScript SDK 1.x does, in `listTools()` and
 `callTool()` — would fail: several response schemas embed the same nested `$id`, which one Ajv
 instance refuses to compile twice, so `listTools()` throws; and real responses do not match their
@@ -131,11 +135,24 @@ documents' response schemas can be honoured.
 
 ## Compatibility
 
-`/mcp-server/datasets/mcp` keeps its pre-1.0 URL and its seven tool names
-(`list_datasets`, `describe_dataset`, `search_data`, `get_field_values`, `aggregate_data`,
-`calculate_metric`, `geocode_address`), unprefixed. Input schemas are generated from the
-services' OpenAPI documents and are read per session, so they may differ from what a 0.x
-client remembers. HTTP+SSE (`/sse`, `/messages`) is removed; only Streamable HTTP is served.
+The datasets server, `/mcp-server/datasets/mcp`, keeps its pre-1.0 URL and its seven tool names,
+unprefixed, each mapped to a platform tool:
+
+| Tool name | Platform tool |
+|-----------|---------------|
+| `list_datasets` | `datafair_list_datasets` |
+| `describe_dataset` | `datafair_describe_dataset` |
+| `search_data` | `datafair_search_data` |
+| `get_field_values` | `datafair_get_field_values` |
+| `aggregate_data` | `datafair_aggregate_data` |
+| `calculate_metric` | `datafair_calculate_metric` |
+| `geocode_address` | the hand-written IGN geocoder |
+
+Descriptions and input schemas come from the platform document and are read per session, so they
+may differ from what a 0.x client remembers. A mapped tool the document lacks is left out and
+reported in `/status`. Skills and guides are served only when all their tools are in the set.
+HTTP+SSE (`/sse`, `/messages`) is removed; only Streamable HTTP is served. In stdio, the datasets
+server is the default (`MCP_SERVER=datasets`).
 
 ## Sponsors
 

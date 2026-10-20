@@ -12,7 +12,7 @@ set -a; . ./.env; set +a
 # the proxy settings are for the server in the container, not for the docker CLI itself
 exec env -u HTTPS_PROXY -u NODE_EXTRA_CA_CERTS docker run -i --rm --pull always --network host \
   -e "PORTAL_URL=${DF_PORTAL_URL:-https://staging-koumoul.com}" \
-  -e "PROFILES=${DF_PROFILES:-catalog,read}" \
+  -e "MCP_SERVER=${DF_MCP_SERVER:-platform}" \
   -e "HTTPS_PROXY=$HTTPS_PROXY" \
   -e NODE_EXTRA_CA_CERTS=/nhi-ca.crt \
   -v "$NODE_EXTRA_CA_CERTS:/nhi-ca.crt:ro" \

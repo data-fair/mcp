@@ -10,8 +10,8 @@ When asked to run the live test, follow the protocol below in order, then write 
 
 ## Rules
 
-- Read-only by default. If tools that create, modify or delete are exposed (profiles `write`,
-  `manage`…), list them but call one only after the user explicitly agreed to that call.
+- Read-only by default. If tools that create, modify or delete are exposed (scopes beyond
+  read), list them but call one only after the user explicitly agreed to that call.
 - Do not work around a failing tool with another channel (curl, web fetch…): the failure is the
   finding.
 - Keep calls small (page sizes of a few items) — this is a check, not an analysis.
@@ -21,7 +21,7 @@ When asked to run the live test, follow the protocol below in order, then write 
 ### 1. Availability
 
 - The `datafair` MCP server is connected. If not, stop and report the client's error.
-- Read the server instructions and list the tools. With the default profiles (`catalog,read`),
+- Read the server instructions and list the tools. With the platform server (`MCP_SERVER=platform`) and an NHI allowed to read,
   expect at least (as of this writing):
   `datafair_list_datasets`, `datafair_describe_dataset`, `datafair_search_data`,
   `datafair_get_field_values`, `datafair_aggregate_data`, `datafair_calculate_metric`,
@@ -63,7 +63,7 @@ first time, and whether errors (if any) told you how to recover.
 
 Write it to `reports/<YYYY-MM-DD-HHmm>.md` and summarize it in the chat:
 
-- context: platform, profiles, image tag (from `.env`), the account
+- context: platform, server (`MCP_SERVER`), image tag (from `.env`), the account
   revealed in step 2;
 - a table: tool | called | outcome (ok / error / unexpected) | notes;
 - missing or unexpected tools and resources;

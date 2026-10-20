@@ -2,25 +2,31 @@
 
 ## Project overview
 
-MCP (Model Context Protocol) server for the Data Fair ecosystem. It composes the deployment's
-tools by profile (`catalog` by default, the `read`/`write`/`manage` grid) — every service that publishes an annotated OpenAPI document (`x-agent`
-operations) is discovered through the main site's agent index and turned into MCP tools by
-`@data-fair/openapi-mcp` — plus `geocode_address`, the one hand-written tool. Two usage modes:
+MCP (Model Context Protocol) server for the Data Fair ecosystem. It serves the tools of data-fair's
+merged platform OpenAPI document (`x-agent` operations, turned into MCP tools by
+`@data-fair/openapi-mcp`), filtered by the caller's token scopes, plus `geocode_address`, the one
+hand-written tool. Two servers:
+
+- **platform server** (`/mcp`, or stdio with `MCP_SERVER=platform`): every tool the caller's
+  verified scopes allow, `datafair_` prefixed. Always authenticated.
+- **datasets server** (`/datasets/mcp`, the stdio default): the published catalog's six tools plus
+  `geocode_address` under the seven pre-1.0 names, unprefixed. Anonymous allowed.
+
+Two usage modes:
 
 - **Standalone mode**: run via Docker with stdio transport, connects remotely to a Data Fair
   instance. Requires `PORTAL_URL`. Supports `DATA_FAIR_API_KEY` for authentication and
-  `PROFILES` to pick which profiles to compose. Tool names carry the `datafair_` prefix.
+  `MCP_SERVER` to pick the server (`datasets` default, `platform`). Scopes come from the main
+  site's `my-session`, read once at startup.
 - **Data Fair stack mode**: deployed as a web service alongside Data Fair (available on
   `/mcp-server` on the same domain). Uses HTTP transport. One published deployment for every
-  caller, the agents service included: every declared profile, data-fair's permissions decide
-  what a caller may do, rate limited per caller identity (else IP).
-  `/mcp-server/datasets/mcp` is a compatibility alias serving data-fair's seven pre-1.0 tool
-  names unprefixed.
+  caller, the agents service included; data-fair's permissions decide what a caller may do.
+  `/mcp-server/ai-catalog.json` publishes the datasets server's card.
 
 ## Tech stack
 
 - Node.js v24, TypeScript (ESM, no build step — runs `.ts` directly)
-- `@data-fair/openapi-mcp` — composes tools from services' annotated OpenAPI documents
+- `@data-fair/openapi-mcp` — builds tools from the annotated platform OpenAPI document
 - `@modelcontextprotocol/server` 2 (stdio and HTTP adapters), `undici` (dispatcher, DNS cache)
 - Express 5 for HTTP transport
 - `@data-fair/lib-*` shared libraries (axios, express helpers, types builder)
@@ -31,32 +37,43 @@ operations) is discovered through the main site's agent index and turned into MC
 - `index.ts` — entrypoint, picks transport (stdio vs HTTP)
 - `src/config.ts` — config loader (uses `config` package + generated types in `config/type/`)
 - `src/server.ts` — HTTP server setup
-- `src/app.ts` — Express app: routes and the per-route rate limiter
-- `src/composition.ts` — the one composer for the process, the composed set, the
-  compatibility alias, extra tools, the refresh loop
+- `src/app.ts` — Express app: the `/mcp` and `/datasets/mcp` routes, `/ai-catalog.json`, `/status`
+- `src/live-document.ts` — the platform document kept live (conditional re-fetch, skill bodies)
+- `src/platform.ts` — the two tool sets derived from the live document, `geocode_address`
+  appended, the refresh loop
+- `src/datasets-server.ts` — the datasets server's fixed name map
+- `src/scopes.ts` — request → verified scopes (lib-express session) or 401; stdio's `my-session`
+- `src/editor-schema.ts` — form-schema preparation for the editor tools
+- `src/ai-catalog.ts` — the `/ai-catalog.json` document
 - `src/site-fetch.ts` — origin swap, dispatcher (DNS cache, optional in-cluster proxy hop)
-- `src/context.ts` — request → `CallContext` (site origin, identity)
-- `src/registry.ts` — the `/v0/servers` document
-- `src/tools/geocode-address.ts` — the IGN geocoder, the one hand-written tool
-- `test/fake-site.ts` — a fake site (`http.Server`) serving the agent index and canned
+- `src/context.ts` — request → `CallContext` (site origin, forwarded credentials, identity)
+- `src/tools/geocode-address.ts`, `src/tools/geocode-limits.ts` — the IGN geocoder, the one
+  hand-written tool, and its rate limits
+- `test/fake-site.ts` — a fake site (`http.Server`) serving the platform document and canned
   responses, used by every test that needs a real upstream
 
 ## Key patterns
 
-- One composer for the whole process, built over the main site's public index; only where
-  calls go varies per request, never the tool definitions
+- One live platform document for the whole process; only where calls go varies per request,
+  never the tool definitions
+- Tools are filtered by verified scopes (`toolsForScopes`): lib-express's session verifies the
+  cookie or bearer, this server never decodes a JWT; an API key or unscoped session sees every
+  tool and data-fair checks each call
+- The datasets server is a fixed map of platform tools to the historic names, not a scope
+  selection (`src/datasets-server.ts`); on that route an unverifiable credential is dropped and
+  the caller served anonymously
 - The request's origin is swapped into every upstream URL per call (`siteFetch`); an
   in-cluster caller without forwarded headers keeps the main site
-- No mode, no profile gate: parity means our agents reach the server like any other client;
-  data-fair's permissions on the forwarded identity are the boundary
-- Rate limiting is per caller (claimed identity: `id_token` cookie or API key, else client IP)
-  under a per-IP ceiling, on every route and for every caller, in-cluster included;
-  `IGNORE_RATE_LIMITING` is temporary — data-fair `docs/architecture/agent-rate-limiting.md`
+- No mode: parity means our agents reach the server like any other client; data-fair's
+  permissions on the forwarded identity are the boundary
+- No general rate limiting here: nginx and data-fair limit callers; only `geocode_address`
+  (it calls IGN) has a global and a per-caller budget — data-fair
+  `docs/architecture/agent-rate-limiting.md`
 - Test fixtures come from data-fair's generators: `node scripts/refresh-fixtures.ts <data-fair checkout>`
 - Tools are generated, not declared: to change a tool's name, description or schema,
   annotate the service's OpenAPI document (`x-agent`) — never edit a schema here
 - `geocode_address` is the one hand-written tool (IGN has no `x-agent` document); it is an
-  `openapi-mcp` `Tool` whose `execute` never throws
+  `openapi-mcp` `Tool` whose `execute` never throws, appended after the scope filter
 
 ## Commands
 
