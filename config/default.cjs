@@ -12,7 +12,7 @@ module.exports = {
   transport: 'stdio',
   mainSiteUrl: undefined,
   docPath: '/data-fair/api/v1/platform/api-docs.json',
-  // in-cluster directory, where in stdio mode and for scope discovery the session is read
+  // in-cluster directory, the source of the session JWKS in HTTP mode (stdio reads <PORTAL_URL>/simple-directory/api/auth/my-session)
   privateDirectoryUrl: 'http://simple-directory:8080',
   mcpServer: 'datasets',
   refreshInterval: 300,

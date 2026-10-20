@@ -66,7 +66,7 @@
     "docPath": { "type": "string", "default": "/data-fair/api/v1/platform/api-docs.json", "description": "Path of the merged platform OpenAPI document on the main site." },
     "privateDirectoryUrl": { "type": "string", "default": "http://simple-directory:8080", "description": "In-cluster URL of the directory service (signing keys, session)." },
     "mcpServer": { "type": "string", "enum": ["datasets", "platform"], "default": "datasets", "description": "Which tool set a standalone (stdio) server serves: the seven dataset tools or the whole platform." },
-    "refreshInterval": { "type": "number", "default": 300, "description": "Seconds between conditional re-fetches of the index and documents; 0 disables." },
+    "refreshInterval": { "type": "number", "default": 300, "description": "Seconds between conditional re-fetches of the platform document and its linked skill bodies; 0 disables." },
     "upstreamProxyHost": { "type": "string", "description": "Optional in-cluster reverse proxy (host or host:port) every site host resolves to; the request keeps the site's Host and gains X-Forwarded-Host/Proto." },
     "extraTools": {
       "type": "object",
