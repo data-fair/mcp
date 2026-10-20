@@ -142,4 +142,16 @@ describe('stdioSession', () => {
     site.setSession({})
     assert.deepEqual(await stdioSession(options()), { authenticated: false })
   })
+  for (const [label, mode] of [['a non-JSON 200 body', 'text'], ['a null body', 'null'], ['a non-2xx answer', 503]] as const) {
+    it(`is unauthenticated on ${label}`, async () => {
+      site.failSession(mode)
+      try { assert.deepEqual(await stdioSession(options()), { authenticated: false }) } finally { site.failSession(undefined) }
+    })
+  }
+  it('is unauthenticated when the site is unreachable', async () => {
+    const dead = await startFakeSite()
+    const url = dead.origin
+    await dead.close()
+    assert.deepEqual(await stdioSession({ mainSiteUrl: url, dispatcher: createDispatcher({ mainSiteUrl: url }) }), { authenticated: false })
+  })
 })

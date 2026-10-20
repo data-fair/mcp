@@ -8,12 +8,13 @@ import { createServer, type Server } from 'node:http'
 import { readFileSync } from 'node:fs'
 import { jwks } from './tokens.ts'
 
-export interface FakeSite { origin: string, port: number, hits: { url: string, headers: Record<string, string | string[] | undefined> }[], uploads: { headers: Record<string, string | string[] | undefined>, body: Buffer }[], setDoc (patch: (doc: any) => void): void, setSession (state: object | undefined): void, failDoc (status: number | undefined): void, close (): Promise<void> }
+export interface FakeSite { origin: string, port: number, hits: { url: string, headers: Record<string, string | string[] | undefined> }[], uploads: { headers: Record<string, string | string[] | undefined>, body: Buffer }[], setDoc (patch: (doc: any) => void): void, setSession (state: object | undefined): void, failSession (mode: number | 'text' | 'null' | undefined): void, failDoc (status: number | undefined): void, close (): Promise<void> }
 
 export async function startFakeSite (): Promise<FakeSite> {
   let doc = JSON.parse(readFileSync(new URL('./fixtures/platform-api-docs.json', import.meta.url), 'utf8'))
   const keys = jwks()
   let session: object = {}
+  let sessionFailure: number | 'text' | 'null' | undefined
   let docFailure: number | undefined
   const FIXTURE_ORIGIN = 'http://fixture.test'
   let etag = 1
@@ -26,7 +27,12 @@ export async function startFakeSite (): Promise<FakeSite> {
     const json = (body: unknown, headers: Record<string, string> = {}) => { res.writeHead(200, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(body)) }
     if (url.pathname === '/simple-directory/.well-known/jwks.json') return json(keys.session)
     if (url.pathname === '/simple-directory/.well-known/scoped-jwks.json') return json(keys.scoped)
-    if (url.pathname === '/simple-directory/api/auth/my-session') return json(session)
+    if (url.pathname === '/simple-directory/api/auth/my-session') {
+      if (typeof sessionFailure === 'number') { res.writeHead(sessionFailure); return res.end('failed') }
+      if (sessionFailure === 'text') { res.writeHead(200, { 'content-type': 'text/html' }); return res.end('<html>login</html>') }
+      if (sessionFailure === 'null') return json(null)
+      return json(session)
+    }
     const skill = url.pathname.match(/^\/data-fair\/api\/v1\/agents\/skills\/([a-z0-9-]+)\.md$/)
     if (skill) {
       try {
@@ -67,6 +73,7 @@ export async function startFakeSite (): Promise<FakeSite> {
     uploads,
     setDoc (patch) { doc = structuredClone(doc); patch(doc); etag++ },
     setSession (state) { session = state ?? {} },
+    failSession (mode) { sessionFailure = mode },
     failDoc (status) { docFailure = status },
     close: () => new Promise<void>(resolve => server.close(() => resolve()))
   }

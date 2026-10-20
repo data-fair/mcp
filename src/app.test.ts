@@ -103,6 +103,21 @@ describe('app', () => {
     const authorization = 'Bearer ' + bearerFor(nhiClaims('applications:read', 'https://other.test'))
     assert.deepEqual(await names('/mcp-server/datasets/mcp', { ...PROXY, authorization }), DATASETS_NAMES)
   })
+  it('ignores a client-sent scopes header and drops an expired cookie on the datasets server', async () => {
+    const headers = { ...PROXY, cookie: cookieFor(USER, { expiresIn: -1 }), 'x-mcp-scopes': '[]' }
+    const client = await connect('/mcp-server/datasets/mcp', headers)
+    try {
+      assert.deepEqual((await client.listTools()).tools.map(t => t.name), DATASETS_NAMES)
+      const res: any = await client.callTool({ name: 'list_datasets', arguments: {} })
+      assert.equal(res.isError, undefined, res.content[0].text)
+      assert.doesNotMatch(res.content[0].text, /cookie=id_token/)
+      assert.equal(site.hits.at(-1)!.headers.cookie, undefined)
+    } finally { await client.close() }
+  })
+  it('ignores a client-sent scopes header on /mcp with an API key', async () => {
+    const all = await names('/mcp-server/mcp', { ...PROXY, cookie: cookieFor(USER) })
+    assert.deepEqual(await names('/mcp-server/mcp', { ...PROXY, 'x-apikey': 'key', 'x-mcp-scopes': '[]' }), all)
+  })
   it('serves an in-cluster caller on the main site', async () => {
     const client = await connect('/mcp', { 'x-apikey': 'key' })
     try {

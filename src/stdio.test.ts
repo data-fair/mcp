@@ -30,6 +30,18 @@ describe('stdio', () => {
     await client.close()
   })
 
+  it('serves the seven datasets names with PORTAL_URL only, even when my-session fails', async () => {
+    const expected = ['aggregate_data', 'calculate_metric', 'describe_dataset', 'geocode_address', 'get_field_values', 'list_datasets', 'search_data']
+    for (const mode of [undefined, 'text', 'null', 503] as const) {
+      site.failSession(mode)
+      const client = new Client({ name: 't', version: '0' })
+      await client.connect(new StdioClientTransport({ command: process.execPath, args: ['index.ts'], env: env({}) }))
+      assert.deepEqual((await client.listTools()).tools.map(t => t.name).sort(), expected, String(mode))
+      await client.close()
+    }
+    site.failSession(undefined)
+  })
+
   it('serves the platform server cut by the session my-session reports', async () => {
     site.setSession({ user: USER, scopes: ['datasets:read'] })
     const transport = new StdioClientTransport({ command: process.execPath, args: ['index.ts'], env: env({ MCP_SERVER: 'platform' }) })
