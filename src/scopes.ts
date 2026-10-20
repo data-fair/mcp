@@ -67,9 +67,14 @@ export function scopesOf (request: Request | undefined): string[] | undefined {
  */
 export async function stdioSession (options: { mainSiteUrl: string, dispatcher: SiteDispatcher, apiKey?: string }): Promise<{ authenticated: boolean, scopes?: string[] }> {
   if (options.apiKey) return { authenticated: true }
-  const fetch = siteFetch(options.mainSiteUrl, { mainSiteUrl: options.mainSiteUrl, dispatcher: options.dispatcher })
-  const res = await fetch(`${options.mainSiteUrl}/simple-directory/api/auth/my-session`)
-  if (!res.ok) return { authenticated: false }
-  const body = await res.json() as { user?: unknown, scopes?: string[] }
-  return body.user ? { authenticated: true, scopes: body.scopes } : { authenticated: false }
+  // any failure (unreachable, non-2xx, not JSON) reads as no session: the datasets server still serves anonymously
+  try {
+    const fetch = siteFetch(options.mainSiteUrl, { mainSiteUrl: options.mainSiteUrl, dispatcher: options.dispatcher })
+    const res = await fetch(`${options.mainSiteUrl}/simple-directory/api/auth/my-session`)
+    if (!res.ok) return { authenticated: false }
+    const body = await res.json() as { user?: unknown, scopes?: string[] } | null
+    return body?.user ? { authenticated: true, scopes: body.scopes } : { authenticated: false }
+  } catch {
+    return { authenticated: false }
+  }
 }

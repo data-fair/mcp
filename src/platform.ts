@@ -39,7 +39,7 @@ export async function createPlatform (options: { config: Pick<ApiConfig, 'locale
     lint: 'warn',
     // the parsed JSON for code mode (the agents service); the text stays what a model reads
     structuredContent: true,
-    // load validates the prefixes: a malformed one fails the first load, so the boot
+    // load validates the prefixes: a malformed one fails the first load, which fails the boot
     files: fileOptions(config.files),
     prepareEditorSchema
   })
