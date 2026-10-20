@@ -89,6 +89,15 @@ describe('credentials', () => {
     const bad = await body(await call('/optional', { authorization: 'Bearer ' + bearerFor(nhiClaims('datasets:read', 'https://other.test')) }))
     assert.equal(bad.authorization, null)
   })
+  it('treats a cookie session without a user as unverified', async () => {
+    for (const cookie of ['id_token=x', 'id_token=']) {
+      const res = await call('/required', { cookie })
+      assert.equal(res.status, 401, cookie)
+      const anonymous = await body(await call('/optional', { cookie }))
+      assert.equal(anonymous.scopes, null)
+      assert.equal(anonymous.cookie, null)
+    }
+  })
   it('fails, not 401, on /mcp when the JWKS cannot be read; anonymous on datasets', async () => {
     // a fresh session handler: no key cached, the directory unreachable
     initSession('http://127.0.0.1:1/simple-directory')

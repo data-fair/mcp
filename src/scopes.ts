@@ -6,7 +6,7 @@
  */
 import type { IncomingMessage } from 'node:http'
 import type { RequestHandler } from 'express'
-import { session, markScopeChecked } from '@data-fair/lib-express'
+import { session, markScopeChecked, httpError } from '@data-fair/lib-express'
 
 export const SCOPES_HEADER = 'x-mcp-scopes'
 
@@ -38,7 +38,10 @@ export function credentials (options: { required: boolean, mainSiteUrl: string }
     markScopeChecked(sessionReq)
     let scopes: string[] | undefined
     try {
-      scopes = (await session.req(sessionReq)).scopes
+      const state = await session.req(sessionReq)
+      // an id_token cookie without its signature reads as no session at all: not a verified caller
+      if (!state.user) throw httpError(401, 'invalid session')
+      scopes = state.scopes
     } catch (err) {
       if (options.required) throw err
       delete req.headers.cookie
