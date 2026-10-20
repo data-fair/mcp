@@ -14,15 +14,14 @@ module.exports = {
   port: 'PORT',
   transport: 'TRANSPORT',
   mainSiteUrl: 'MAIN_SITE_URL',
-  indexPath: 'INDEX_PATH',
+  docPath: 'DOC_PATH',
+  privateDirectoryUrl: 'PRIVATE_DIRECTORY_URL',
+  mcpServer: 'MCP_SERVER',
   refreshInterval: 'REFRESH_INTERVAL',
-  // JSON array or comma-separated list, both accepted (see normalizeLists in
-  // src/config.ts) — so __format: 'json' is left off here, the raw string reaches config.
   upstreamProxyHost: 'UPSTREAM_PROXY_HOST',
   extraTools: {
     geocodeAddress: {
       active: { __name: 'EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE', __format: 'json' },
-      profiles: 'EXTRA_TOOLS_GEOCODE_ADDRESS_PROFILES',
       limits: { __name: 'EXTRA_TOOLS_GEOCODE_ADDRESS_LIMITS', __format: 'json' }
     }
   },

@@ -1,16 +1,20 @@
 /**
- * A site for the tests: the index, the annotated data-fair document (servers[0].url pointed
- * at this site) and canned dataset responses that echo the request's host, cookies and
- * forwarded headers — so assertions read what actually reached the API.
+ * A site for the tests: the merged platform document (the fixture origin replaced by this
+ * site's), the directory's JWK sets and session, the skill files and canned dataset responses
+ * that echo the request's host, cookies and forwarded headers — so assertions read what
+ * actually reached the API.
  */
 import { createServer, type Server } from 'node:http'
 import { readFileSync } from 'node:fs'
+import { jwks } from './tokens.ts'
 
-export interface FakeSite { origin: string, port: number, hits: { url: string, headers: Record<string, string | string[] | undefined> }[], uploads: { headers: Record<string, string | string[] | undefined>, body: Buffer }[], setDoc (patch: (doc: any) => void): void, close (): Promise<void> }
+export interface FakeSite { origin: string, port: number, hits: { url: string, headers: Record<string, string | string[] | undefined> }[], uploads: { headers: Record<string, string | string[] | undefined>, body: Buffer }[], setDoc (patch: (doc: any) => void): void, setSession (state: object | undefined): void, failDoc (status: number | undefined): void, close (): Promise<void> }
 
 export async function startFakeSite (): Promise<FakeSite> {
-  let doc = JSON.parse(readFileSync(new URL('./fixtures/data-fair-api-docs.json', import.meta.url), 'utf8'))
-  const index = JSON.parse(readFileSync(new URL('./fixtures/data-fair-agents-index.json', import.meta.url), 'utf8'))
+  let doc = JSON.parse(readFileSync(new URL('./fixtures/platform-api-docs.json', import.meta.url), 'utf8'))
+  const keys = jwks()
+  let session: object = {}
+  let docFailure: number | undefined
   const FIXTURE_ORIGIN = 'http://fixture.test'
   let etag = 1
   const hits: FakeSite['hits'] = []
@@ -20,10 +24,9 @@ export async function startFakeSite (): Promise<FakeSite> {
     const url = new URL(req.url!, origin)
     hits.push({ url: req.url!, headers: req.headers as any })
     const json = (body: unknown, headers: Record<string, string> = {}) => { res.writeHead(200, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(body)) }
-    if (url.pathname === '/data-fair/api/v1/agents/index.json') {
-      // generated against a placeholder origin: the services point at this site
-      return json({ ...index, services: index.services.map((s: any) => ({ ...s, openapi: s.openapi.replace(FIXTURE_ORIGIN, origin) })) }, { etag: '"index"' })
-    }
+    if (url.pathname === '/simple-directory/.well-known/jwks.json') return json(keys.session)
+    if (url.pathname === '/simple-directory/.well-known/scoped-jwks.json') return json(keys.scoped)
+    if (url.pathname === '/simple-directory/api/auth/my-session') return json(session)
     const skill = url.pathname.match(/^\/data-fair\/api\/v1\/agents\/skills\/([a-z0-9-]+)\.md$/)
     if (skill) {
       try {
@@ -31,9 +34,11 @@ export async function startFakeSite (): Promise<FakeSite> {
         res.writeHead(200, { 'content-type': 'text/markdown' }); return res.end(body)
       } catch { res.writeHead(404); return res.end('unknown skill') }
     }
-    if (url.pathname === '/data-fair/api/v1/api-docs.json') {
+    if (url.pathname === '/data-fair/api/v1/platform/api-docs.json') {
+      if (docFailure) { res.writeHead(docFailure); return res.end('doc unavailable') }
       if (req.headers['if-none-match'] === `"${etag}"`) { res.writeHead(304); return res.end() }
-      return json({ ...doc, servers: [{ url: `${origin}/data-fair/api/v1` }] }, { etag: `"${etag}"` })
+      // generated against a placeholder origin: every reference points at this site
+      return json(JSON.parse(JSON.stringify(doc).replaceAll(FIXTURE_ORIGIN, origin)), { etag: `"${etag}"` })
     }
     // a dataset upload: recorded with its headers and exact bytes, as data-fair would receive it
     if (req.method === 'POST' && url.pathname === '/data-fair/api/v1/datasets') {
@@ -61,6 +66,8 @@ export async function startFakeSite (): Promise<FakeSite> {
     hits,
     uploads,
     setDoc (patch) { doc = structuredClone(doc); patch(doc); etag++ },
+    setSession (state) { session = state ?? {} },
+    failDoc (status) { docFailure = status },
     close: () => new Promise<void>(resolve => server.close(() => resolve()))
   }
 }

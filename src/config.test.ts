@@ -5,14 +5,16 @@ import { normalizeLists } from './config.ts'
 process.env.NODE_CONFIG_DIR = process.cwd() + '/config'
 
 describe('config', () => {
-  it('has the composed server defaults', async () => {
+  it('defaults to the platform document, the in-cluster directory and the datasets server', async () => {
     const config = (await import('#config')).default
-    assert.equal(config.indexPath, '/data-fair/api/v1/agents/index.json')
+    assert.equal(config.docPath, '/data-fair/api/v1/platform/api-docs.json')
+    assert.equal(config.privateDirectoryUrl, 'http://simple-directory:8080')
+    assert.equal(config.mcpServer, 'datasets')
+    assert.equal((config as any).indexPath, undefined)
+    assert.equal((config.extraTools.geocodeAddress as any).profiles, undefined)
     assert.equal(config.refreshInterval, 300)
-    assert.equal((config as any).mode, undefined, 'one published server: no mode')
-    assert.equal((config as any).publicProfiles, undefined)
     assert.equal(config.upstreamProxyHost, undefined)
-    assert.deepEqual(config.extraTools, { geocodeAddress: { active: true, profiles: ['catalog'], limits: { global: { nb: 40, duration: 1 }, perCaller: { nb: 10, duration: 1 } } } })
+    assert.deepEqual(config.extraTools, { geocodeAddress: { active: true, limits: { global: { nb: 40, duration: 1 }, perCaller: { nb: 10, duration: 1 } } } })
     assert.equal(config.observer.port, 9090)
     assert.deepEqual(config.files, { urlPrefixes: [] })
   })
@@ -26,22 +28,7 @@ describe('config', () => {
     assert.doesNotThrow(() => assertValid({ ...structuredClone(base), files: { urlPrefixes: [], maxSize: 1, timeout: 1 } }, { lang: 'en', name: 'config' }))
   })
 
-  describe('normalizeLists', () => {
-    it('parses a JSON array string for the geocode profiles', () => {
-      const config = normalizeLists({ extraTools: { geocodeAddress: { profiles: '["catalog"]' } } })
-      assert.deepEqual(config.extraTools!.geocodeAddress!.profiles, ['catalog'])
-    })
-    it('splits a comma-separated string, trims, and drops empty entries', () => {
-      const config = normalizeLists({ extraTools: { geocodeAddress: { profiles: ' catalog, read ,,' } } })
-      assert.deepEqual(config.extraTools!.geocodeAddress!.profiles, ['catalog', 'read'])
-    })
-    it('leaves an already-array value untouched', () => {
-      const config = normalizeLists({ extraTools: { geocodeAddress: { profiles: ['catalog'] } } })
-      assert.deepEqual(config.extraTools!.geocodeAddress!.profiles, ['catalog'])
-    })
-    it('splits FILE_URL_PREFIXES, a comma-separated list', () => {
-      const config = normalizeLists({ files: { urlPrefixes: 'https://s3.test/bucket/ , https://s3.test/other/' } } as any)
-      assert.deepEqual(config.files.urlPrefixes, ['https://s3.test/bucket/', 'https://s3.test/other/'])
-    })
+  it('still splits FILE_URL_PREFIXES', () => {
+    assert.deepEqual(normalizeLists({ files: { urlPrefixes: 'https://a/, https://b/' } }).files.urlPrefixes, ['https://a/', 'https://b/'])
   })
 })

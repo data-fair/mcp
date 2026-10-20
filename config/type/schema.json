@@ -17,7 +17,9 @@
     "observer",
     "port",
     "transport",
-    "indexPath",
+    "docPath",
+    "privateDirectoryUrl",
+    "mcpServer",
     "refreshInterval",
     "extraTools",
     "files"
@@ -60,8 +62,10 @@
       "type": "string",
       "enum": ["stdio", "http"]
     },
-    "mainSiteUrl": { "type": "string", "description": "Origin of the main site (https://host). The index and every document are fetched from it; upstream calls swap it for the requesting site's origin. In stdio mode defaults to portalUrl.", "example": "https://koumoul.com" },
-    "indexPath": { "type": "string", "default": "/data-fair/api/v1/agents/index.json" },
+    "mainSiteUrl": { "type": "string", "description": "Origin of the main site (https://host). The platform document is fetched from it; upstream calls swap it for the requesting site's origin. In stdio mode defaults to portalUrl.", "example": "https://koumoul.com" },
+    "docPath": { "type": "string", "default": "/data-fair/api/v1/platform/api-docs.json", "description": "Path of the merged platform OpenAPI document on the main site." },
+    "privateDirectoryUrl": { "type": "string", "default": "http://simple-directory:8080", "description": "In-cluster URL of the directory service (signing keys, session)." },
+    "mcpServer": { "type": "string", "enum": ["datasets", "platform"], "default": "datasets", "description": "Which tool set a standalone (stdio) server serves: the seven dataset tools or the whole platform." },
     "refreshInterval": { "type": "number", "default": 300, "description": "Seconds between conditional re-fetches of the index and documents; 0 disables." },
     "upstreamProxyHost": { "type": "string", "description": "Optional in-cluster reverse proxy (host or host:port) every site host resolves to; the request keeps the site's Host and gains X-Forwarded-Host/Proto." },
     "extraTools": {
@@ -70,10 +74,9 @@
       "properties": {
         "geocodeAddress": {
           "type": "object",
-          "required": ["active", "profiles"],
+          "required": ["active"],
           "properties": {
             "active": { "type": "boolean", "default": true },
-            "profiles": { "type": "array", "items": { "type": "string" }, "default": ["catalog"], "description": "The tool joins the set when the request's profiles intersect this list." },
             "limits": {
               "type": "object",
               "description": "Calls to IGN: a global budget per instance (IGN allows 50 requests per second per source IP, divide by replicas) and a per-caller one, so no caller fills the global one.",
