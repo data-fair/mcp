@@ -13,7 +13,7 @@ const linkTool = (uri: string): Tool => ({
     return { text: `File ds1-raw, not downloaded by this tool: ${uri}`, resourceLink: { uri, name: 'ds1-raw' } }
   }
 })
-const set = (tool: Tool): ToolSet => ({ profiles: ['read'], instructions: '', tools: [tool], skills: [] })
+const set = (tool: Tool): ToolSet => ({ tools: [tool], skills: [], guides: [] })
 
 describe('linksOnSite', () => {
   it('moves a main-site link, and its mention in the text, onto the requesting site', async () => {

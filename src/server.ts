@@ -3,12 +3,13 @@ import { createHttpTerminator, type HttpTerminator } from 'http-terminator'
 import { startObserver, stopObserver } from '@data-fair/lib-node/observer.js'
 import config, { type ApiConfig } from '#config'
 import { createDispatcher, type SiteDispatcher } from './site-fetch.ts'
-import { createComposition, type Composition } from './composition.ts'
+import { session } from '@data-fair/lib-express'
+import { createPlatform, type Platform } from './platform.ts'
 import { createApp } from './app.ts'
 
 export interface Runtime {
   app: ReturnType<typeof createApp>
-  composition: Composition
+  platform: Platform
   dispatcher: SiteDispatcher
   mainSiteUrl: string
 }
@@ -16,8 +17,9 @@ export interface Runtime {
 /**
  * Everything start() needs beyond listening: resolves mainSiteUrl (falling back to
  * portalUrl, writing the resolved value back so app.ts/context.ts can keep reading
- * `config.mainSiteUrl!` directly), then builds the dispatcher, the composition and the
- * app over it — the dispatcher carries upstreamProxyHost itself (see SiteDispatcher), so
+ * `config.mainSiteUrl!` directly), initializes the session reader on the private directory
+ * (scope-aware: the credentials middleware reads the caller's scopes from it), then builds the
+ * dispatcher, the platform and the app over it — the dispatcher carries upstreamProxyHost itself (see SiteDispatcher), so
  * every consumer built from it honours the same proxy, never a separately passed option
  * that could drift out of sync with it.
  */
@@ -27,19 +29,20 @@ export async function createRuntime (config: ApiConfig): Promise<Runtime> {
   config.mainSiteUrl ??= mainSiteUrl
 
   const dispatcher = createDispatcher({ mainSiteUrl, upstreamProxyHost: config.upstreamProxyHost, timeoutMs: 30_000 })
-  const composition = await createComposition({ config, dispatcher, mainSiteUrl })
-  const app = createApp(composition, dispatcher)
+  session.init(config.privateDirectoryUrl, undefined, undefined, { scopeAware: true })
+  const platform = await createPlatform({ config, dispatcher, mainSiteUrl })
+  const app = createApp(platform, dispatcher)
 
-  return { app, composition, dispatcher, mainSiteUrl }
+  return { app, platform, dispatcher, mainSiteUrl }
 }
 
 let server: Server
 let httpTerminator: HttpTerminator | undefined
-let composition: Composition | undefined
+let platform: Platform | undefined
 
 export const start = async () => {
   const runtime = await createRuntime(config)
-  composition = runtime.composition
+  platform = runtime.platform
 
   server = createServer(runtime.app)
   httpTerminator = createHttpTerminator({ server })
@@ -59,6 +62,6 @@ export const start = async () => {
 
 export const stop = async () => {
   await httpTerminator?.terminate()
-  composition?.close()
+  platform?.close()
   if (config.observer.active) await stopObserver()
 }
