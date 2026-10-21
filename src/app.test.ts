@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { startFakeSite, type FakeSite } from '../test/fake-site.ts'
-import { bearerFor, cookieFor, nhiClaims, USER } from '../test/tokens.ts'
+import { bearerFor, cookieFor, nhiClaims, userClaims, USER } from '../test/tokens.ts'
 import config from '#config'
 import type { Runtime } from './server.ts'
 
@@ -102,6 +102,15 @@ describe('app', () => {
   it('serves the datasets server anonymously to a credential that does not verify', async () => {
     const authorization = 'Bearer ' + bearerFor(nhiClaims('applications:read', 'https://other.test'))
     assert.deepEqual(await names('/mcp-server/datasets/mcp', { ...PROXY, authorization }), DATASETS_NAMES)
+  })
+  it('serves the datasets server anonymously to a bearer without the MCP audience', async () => {
+    // accepted, its scopes would cut the server down to geocode_address
+    const authorization = 'Bearer ' + bearerFor(nhiClaims('applications:read', 'https://portal.test', 'https://portal.test'))
+    assert.deepEqual(await names('/mcp-server/datasets/mcp', { ...PROXY, authorization }), DATASETS_NAMES)
+  })
+  it('refuses a dashboard bearer on /mcp', async () => {
+    const authorization = 'Bearer ' + bearerFor(userClaims('datasets:read', 'https://portal.test'))
+    await assert.rejects(names('/mcp-server/mcp', { ...PROXY, authorization }))
   })
   it('ignores a client-sent scopes header and drops an expired cookie on the datasets server', async () => {
     const headers = { ...PROXY, cookie: cookieFor(USER, { expiresIn: -1 }), 'x-mcp-scopes': '[]' }

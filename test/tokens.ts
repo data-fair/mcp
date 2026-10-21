@@ -32,17 +32,26 @@ export function cookieFor (payload: object, options: { expiresIn?: jwt.SignOptio
 /** A bearer access token (`Bearer` prefix not included). */
 export const bearerFor = (payload: object): string => sign(scopedKeys.privateKey, 'scoped-sd-1', payload, { typ: 'at+jwt' })
 
-/** Claims of an access token: one organization, scopes (space-separated) and the audience (the site origin). */
-export const nhiClaims = (scope: string, aud: string): object => ({
+/**
+ * Claims of an NHI access token: one organization, scopes (space-separated), issued on `site`.
+ * The audience defaults to what SD gives an MCP token: the MCP and the site API.
+ */
+export const nhiClaims = (scope: string, site: string, aud: string | string[] = [site + '/mcp-server', site]): object => ({
   ...USER,
   organizations: [{ id: 'org1', name: 'Test Org', role: 'admin' }],
   nhi: 1,
-  iss: `${aud}/simple-directory`,
+  iss: `${site}/simple-directory`,
   aud,
   client_id: 'nhi-test',
   jti: 'jti-test',
   scope
 })
+
+/** Claims of a user access token (a dashboard's): no `nhi` flag. */
+export const userClaims = (scope: string, site: string, aud: string | string[] = site): object => {
+  const { nhi, ...claims } = nhiClaims(scope, site, aud) as { nhi: number }
+  return { ...claims, client_id: 'dashboard' }
+}
 
 /** A user without scopes. */
 export const USER = {

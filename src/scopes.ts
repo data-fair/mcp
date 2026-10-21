@@ -11,9 +11,19 @@ import { siteFetch, type SiteDispatcher } from './site-fetch.ts'
 
 export const SCOPES_HEADER = 'x-mcp-scopes'
 
+/** Where the server is mounted on a site: a bearer must name `<siteUrl>/mcp-server` in its audience. */
+export const MCP_PATH = '/mcp-server'
+
+/**
+ * The session reader's options: scope-aware, and a bearer is addressed to this server (SD gives
+ * an MCP token the MCP and the site API audiences; a dashboard token, the site API only).
+ */
+export const sessionOptions = { scopeAware: true, audiences: (siteUrl: string) => [siteUrl + MCP_PATH] }
+
+const hasBearer = (req: IncomingMessage) => /^bearer(\s|$)/i.test(req.headers.authorization ?? '')
+
 /** a cookie session or a bearer access token, the credentials a session is read from */
-const hasSessionCredential = (req: IncomingMessage) =>
-  /(^|;\s*)id_token=/.test(req.headers.cookie ?? '') || /^bearer(\s|$)/i.test(req.headers.authorization ?? '')
+const hasSessionCredential = (req: IncomingMessage) => /(^|;\s*)id_token=/.test(req.headers.cookie ?? '') || hasBearer(req)
 
 /**
  * `required`: a caller without credentials is refused, a credential that does not verify fails
@@ -42,6 +52,8 @@ export function credentials (options: { required: boolean, mainSiteUrl: string }
       const state = await session.req(sessionReq)
       // an id_token cookie without its signature reads as no session at all: not a verified caller
       if (!state.user) throw httpError(401, 'invalid session')
+      // the bearer is read first and decides: on this server it is an NHI's, never a user's
+      if (hasBearer(req) && !state.user.nhi) throw httpError(401, 'invalid token')
       scopes = state.scopes
     } catch (err) {
       if (options.required) throw err

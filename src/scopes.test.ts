@@ -4,8 +4,8 @@ import type { Server } from 'node:http'
 import express from 'express'
 import { session } from '@data-fair/lib-express'
 import { startFakeSite, type FakeSite } from '../test/fake-site.ts'
-import { bearerFor, cookieFor, nhiClaims, USER } from '../test/tokens.ts'
-import { credentials, scopesOf, stdioSession, SCOPES_HEADER } from './scopes.ts'
+import { bearerFor, cookieFor, nhiClaims, userClaims, USER } from '../test/tokens.ts'
+import { credentials, scopesOf, stdioSession, SCOPES_HEADER, sessionOptions } from './scopes.ts'
 import { createDispatcher } from './site-fetch.ts'
 
 const FORWARDED = { 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https', 'x-forwarded-for': '203.0.113.7' }
@@ -15,7 +15,7 @@ describe('credentials', () => {
   let site: FakeSite
   let server: Server
   let base: string
-  const initSession = (directoryUrl: string) => session.init(directoryUrl, undefined, undefined, { scopeAware: true })
+  const initSession = (directoryUrl: string) => session.init(directoryUrl, undefined, undefined, sessionOptions)
 
   before(async () => {
     site = await startFakeSite()
@@ -64,7 +64,7 @@ describe('credentials', () => {
   it('reads the scopes of a scoped cookie session', async () => {
     assert.deepEqual((await body(await call('/required', { cookie: cookieFor({ ...ONE_ORG, scope: 'datasets:read' }) }))).scopes, ['datasets:read'])
   })
-  it('reads the scopes of a bearer addressed to the site', async () => {
+  it('reads the scopes of an NHI bearer with the MCP audience', async () => {
     const res = await body(await call('/required', { authorization: 'Bearer ' + bearerFor(nhiClaims('datasets:read', 'https://portal.test')) }))
     assert.deepEqual(res.scopes, ['datasets:read'])
     assert.ok(res.authorization)
@@ -72,6 +72,23 @@ describe('credentials', () => {
   it('reads an in-cluster bearer against the main site', async () => {
     const res = await call('/required', { authorization: 'Bearer ' + bearerFor(nhiClaims('datasets:read', site.origin)) }, false)
     assert.deepEqual((await body(res)).scopes, ['datasets:read'])
+  })
+  it('refuses an NHI bearer with the site audience only', async () => {
+    const res = await call('/required', { authorization: 'Bearer ' + bearerFor(nhiClaims('datasets:read', 'https://portal.test', 'https://portal.test')) })
+    assert.equal(res.status, 401)
+  })
+  it('refuses a user bearer with the MCP audience', async () => {
+    const res = await call('/required', { authorization: 'Bearer ' + bearerFor(userClaims('datasets:read', 'https://portal.test', ['https://portal.test/mcp-server', 'https://portal.test'])) })
+    assert.equal(res.status, 401)
+  })
+  it('judges a request on its bearer, not its cookie', async () => {
+    const res = await call('/required', { cookie: cookieFor(USER), authorization: 'Bearer ' + bearerFor(nhiClaims('datasets:read', 'https://portal.test', 'https://portal.test')) })
+    assert.equal(res.status, 401)
+  })
+  it('drops a site-audience bearer on the optional route', async () => {
+    const res = await body(await call('/optional', { authorization: 'Bearer ' + bearerFor(userClaims('datasets:read', 'https://portal.test')) }))
+    assert.equal(res.authorization, null)
+    assert.equal(res.scopes, null)
   })
   it('refuses a bearer addressed to another site', async () => {
     const res = await call('/required', { authorization: 'Bearer ' + bearerFor(nhiClaims('datasets:read', 'https://other.test')) })
