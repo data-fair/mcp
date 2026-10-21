@@ -8,7 +8,7 @@ import { createServer, type Server } from 'node:http'
 import { readFileSync } from 'node:fs'
 import { jwks } from './tokens.ts'
 
-export interface FakeSite { origin: string, port: number, hits: { url: string, headers: Record<string, string | string[] | undefined> }[], uploads: { headers: Record<string, string | string[] | undefined>, body: Buffer }[], setDoc (patch: (doc: any) => void): void, setSession (state: object | undefined): void, failSession (mode: number | 'text' | 'null' | undefined): void, failDoc (status: number | undefined): void, close (): Promise<void> }
+export interface FakeSite { origin: string, port: number, hits: { url: string, headers: Record<string, string | string[] | undefined> }[], uploads: { headers: Record<string, string | string[] | undefined>, body: Buffer }[], setDoc (patch: (doc: any) => void): void, setSession (state: object | undefined): void, setDiscovery (answer: object | number | 'hang' | 'default' | undefined): void, failSession (mode: number | 'text' | 'null' | undefined): void, failDoc (status: number | undefined): void, close (): Promise<void> }
 
 export async function startFakeSite (): Promise<FakeSite> {
   let doc = JSON.parse(readFileSync(new URL('./fixtures/platform-api-docs.json', import.meta.url), 'utf8'))
@@ -16,6 +16,8 @@ export async function startFakeSite (): Promise<FakeSite> {
   let session: object = {}
   let sessionFailure: number | 'text' | 'null' | undefined
   let docFailure: number | undefined
+  // SD's authorization server discovery: 'default' a complete one issued on the requested site
+  let discovery: object | number | 'hang' | 'default' = 'default'
   const FIXTURE_ORIGIN = 'http://fixture.test'
   let etag = 1
   const hits: FakeSite['hits'] = []
@@ -27,6 +29,14 @@ export async function startFakeSite (): Promise<FakeSite> {
     const json = (body: unknown, headers: Record<string, string> = {}) => { res.writeHead(200, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(body)) }
     if (url.pathname === '/simple-directory/.well-known/jwks.json') return json(keys.session)
     if (url.pathname === '/simple-directory/.well-known/scoped-jwks.json') return json(keys.scoped)
+    if (url.pathname === '/simple-directory/.well-known/oauth-authorization-server') {
+      if (discovery === 'hang') return
+      if (typeof discovery === 'number') { res.writeHead(discovery); return res.end('no discovery') }
+      if (discovery !== 'default') return json(discovery)
+      const forwarded = req.headers['x-forwarded-host'] ? `${req.headers['x-forwarded-proto'] ?? 'https'}://${req.headers['x-forwarded-host']}` : origin
+      const issuer = forwarded + '/simple-directory'
+      return json({ issuer, authorization_endpoint: issuer + '/api/oauth/authorize', token_endpoint: issuer + '/api/oauth/token', registration_endpoint: issuer + '/api/oauth/register', client_id_metadata_document_supported: true })
+    }
     if (url.pathname === '/simple-directory/api/auth/my-session') {
       if (typeof sessionFailure === 'number') { res.writeHead(sessionFailure); return res.end('failed') }
       if (sessionFailure === 'text') { res.writeHead(200, { 'content-type': 'text/html' }); return res.end('<html>login</html>') }
@@ -74,7 +84,8 @@ export async function startFakeSite (): Promise<FakeSite> {
     setDoc (patch) { doc = structuredClone(doc); patch(doc); etag++ },
     setSession (state) { session = state ?? {} },
     failSession (mode) { sessionFailure = mode },
+    setDiscovery (answer) { discovery = answer ?? 404 },
     failDoc (status) { docFailure = status },
-    close: () => new Promise<void>(resolve => server.close(() => resolve()))
+    close: () => new Promise<void>(resolve => { server.close(() => resolve()); server.closeAllConnections() })
   }
 }
