@@ -7,6 +7,7 @@ import { session } from '@data-fair/lib-express'
 import { createPlatform, type Platform } from './platform.ts'
 import { createApp } from './app.ts'
 import { sessionOptions } from './scopes.ts'
+import { createIssuerLookup } from './oauth-discovery.ts'
 
 export interface Runtime {
   app: ReturnType<typeof createApp>
@@ -32,7 +33,8 @@ export async function createRuntime (config: ApiConfig): Promise<Runtime> {
   const dispatcher = createDispatcher({ mainSiteUrl, upstreamProxyHost: config.upstreamProxyHost, timeoutMs: 30_000 })
   session.init(config.privateDirectoryUrl, undefined, undefined, sessionOptions)
   const platform = await createPlatform({ config, dispatcher, mainSiteUrl })
-  const app = createApp(platform, dispatcher)
+  const issuerOf = createIssuerLookup({ mainSiteUrl, dispatcher, trustedForwarder: config.trustedForwarder })
+  const app = createApp(platform, dispatcher, issuerOf)
 
   return { app, platform, dispatcher, mainSiteUrl }
 }

@@ -238,4 +238,71 @@ describe('app', () => {
     assert.match(allow, /Mcp-Session-Id/)
     assert.match(allow, /Authorization/)
   })
+
+  describe('oauth discovery', () => {
+    const METADATA = 'https://portal.test/mcp-server/.well-known/oauth-protected-resource/mcp'
+    const post = (path: string, headers: Record<string, string> = {}) =>
+      fetch(base + path, { method: 'POST', headers: { ...PROXY, 'content-type': 'application/json', ...headers }, body: '{}' })
+    // a fresh site each time, the lookup caches per site
+    let n = 0
+    const fresh = () => ({ ...PROXY, 'x-forwarded-host': `site${++n}.test` })
+
+    it('points a caller without credentials at the metadata', async () => {
+      const res = await post('/mcp-server/mcp')
+      assert.equal(res.status, 401)
+      assert.equal(res.headers.get('www-authenticate'), `Bearer resource_metadata="${METADATA}"`)
+      assert.match(res.headers.get('access-control-expose-headers') ?? '', /WWW-Authenticate/)
+    })
+    it('marks a refused bearer as an invalid token', async () => {
+      const res = await post('/mcp-server/mcp', { authorization: 'Bearer ' + bearerFor(nhiClaims('datasets:read', 'https://portal.test', 'https://portal.test')) })
+      assert.equal(res.status, 401)
+      assert.equal(res.headers.get('www-authenticate'), `Bearer error="invalid_token", resource_metadata="${METADATA}"`)
+    })
+    it('does not mark a refused cookie as an invalid token', async () => {
+      const res = await post('/mcp-server/mcp', { cookie: cookieFor(USER, { expiresIn: -1 }) })
+      assert.equal(res.status, 401)
+      assert.equal(res.headers.get('www-authenticate'), `Bearer resource_metadata="${METADATA}"`)
+    })
+    it('offers no metadata on a site that is not an issuer site', async () => {
+      site.setDiscovery(404)
+      try {
+        const headers = fresh()
+        const res = await post('/mcp-server/mcp', headers)
+        assert.equal(res.status, 401)
+        assert.equal(res.headers.get('www-authenticate'), 'Bearer')
+        const metadata = await fetch(`${base}/mcp-server/.well-known/oauth-protected-resource/mcp`, { headers })
+        assert.equal(metadata.status, 404)
+      } finally { site.setDiscovery('default') }
+    })
+    it('offers no metadata on a site with a path prefix', async () => {
+      const res = await post('/portal/mcp-server/mcp')
+      assert.equal(res.status, 401)
+      assert.equal(res.headers.get('www-authenticate'), 'Bearer')
+      const metadata = await fetch(`${base}/portal/mcp-server/.well-known/oauth-protected-resource/mcp`, { headers: PROXY })
+      assert.equal(metadata.status, 404)
+    })
+    it('never sends a challenge from the datasets server', async () => {
+      const res = await post('/mcp-server/datasets/mcp', { authorization: 'Bearer ' + bearerFor(nhiClaims('datasets:read', 'https://portal.test', 'https://portal.test')) })
+      assert.notEqual(res.status, 401)
+      assert.equal(res.headers.get('www-authenticate'), null)
+    })
+    it('serves the metadata of an issuer site', async () => {
+      const res = await fetch(`${base}/mcp-server/.well-known/oauth-protected-resource/mcp`, { headers: PROXY })
+      assert.equal(res.status, 200)
+      assert.equal(res.headers.get('access-control-allow-origin'), '*')
+      const doc: any = await res.json()
+      assert.equal(doc.resource, 'https://portal.test/mcp-server/mcp')
+      assert.deepEqual(doc.authorization_servers, ['https://portal.test/simple-directory'])
+      assert.ok(doc.scopes_supported.includes('datasets:read'))
+    })
+    it('follows the platform document in scopes_supported', async () => {
+      site.setDoc(doc => {
+        const op = Object.values<any>(doc.paths).map(p => p.get).find(get => get?.['x-agent'])
+        op.security = [{ oauth2: ['fresh:scope'] }]
+      })
+      assert.equal(await runtime.platform.refresh(), true)
+      const doc: any = await (await fetch(`${base}/mcp-server/.well-known/oauth-protected-resource/mcp`, { headers: fresh() })).json()
+      assert.ok(doc.scopes_supported.includes('fresh:scope'))
+    })
+  })
 })

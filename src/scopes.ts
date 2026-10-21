@@ -5,7 +5,7 @@
  * always deleted first. An API key is passed on unscoped: data-fair checks it.
  */
 import type { IncomingMessage } from 'node:http'
-import type { RequestHandler } from 'express'
+import type { Request as ExpressRequest, RequestHandler, Response } from 'express'
 import { session, markScopeChecked, httpError } from '@data-fair/lib-express'
 import { siteFetch, type SiteDispatcher } from './site-fetch.ts'
 
@@ -27,15 +27,23 @@ const hasSessionCredential = (req: IncomingMessage) => /(^|;\s*)id_token=/.test(
 
 /**
  * `required`: a caller without credentials is refused, a credential that does not verify fails
- * with its error (401 for a bad token, 5xx when the directory's keys cannot be read). Not
- * `required`: a credential that does not verify is dropped and the caller served anonymously.
+ * with its error (401 for a bad token, 5xx when the directory's keys cannot be read). A 401 is a
+ * challenge (RFC 6750, RFC 9728): `WWW-Authenticate: Bearer`, `error="invalid_token"` for a
+ * refused bearer, and the metadata an MCP client starts OAuth from when `resourceMetadata`
+ * gives one. Not `required`: a credential that does not verify is dropped and the caller served
+ * anonymously, with no challenge.
  */
-export function credentials (options: { required: boolean, mainSiteUrl: string }): RequestHandler {
+export function credentials (options: { required: boolean, mainSiteUrl: string, resourceMetadata?: (req: ExpressRequest) => Promise<string | undefined> }): RequestHandler {
   const main = new URL(options.mainSiteUrl)
+  const challenge = async (req: ExpressRequest, res: Response, invalidToken: boolean) => {
+    const params = [invalidToken && 'error="invalid_token"', await options.resourceMetadata?.(req).then(url => url && `resource_metadata="${url}"`)].filter(Boolean)
+    res.setHeader('WWW-Authenticate', ['Bearer', params.join(', ')].filter(Boolean).join(' '))
+  }
   return async (req, res, next) => {
     delete req.headers[SCOPES_HEADER]
     if (!hasSessionCredential(req)) {
       if (options.required && !req.headers['x-apikey'] && !req.headers['x-api-key']) {
+        await challenge(req, res, false)
         res.status(401).type('text').send('credentials required')
         return
       }
@@ -56,7 +64,10 @@ export function credentials (options: { required: boolean, mainSiteUrl: string }
       if (hasBearer(req) && !state.user.nhi) throw httpError(401, 'invalid token')
       scopes = state.scopes
     } catch (err) {
-      if (options.required) throw err
+      if (options.required) {
+        if ((err as { status?: number }).status === 401) await challenge(req, res, hasBearer(req))
+        throw err
+      }
       delete req.headers.cookie
       delete req.headers.authorization
       return next()
