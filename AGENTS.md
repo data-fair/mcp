@@ -42,7 +42,9 @@ Two usage modes:
 - `src/platform.ts` — the two tool sets derived from the live document, `geocode_address`
   appended, the refresh loop
 - `src/datasets-server.ts` — the datasets server's fixed name map
-- `src/scopes.ts` — request → verified scopes (lib-express session) or 401; stdio's `my-session`
+- `src/scopes.ts` — request → verified scopes (lib-express session) or a 401 challenge; the MCP
+  audience; stdio's `my-session`
+- `src/oauth-discovery.ts` — the site's SD issuer (probed, cached) and the RFC 9728 metadata
 - `src/editor-schema.ts` — form-schema preparation for the editor tools
 - `src/ai-catalog.ts` — the `/ai-catalog.json` document
 - `src/site-fetch.ts` — origin swap, dispatcher (DNS cache, optional in-cluster proxy hop)
@@ -59,6 +61,11 @@ Two usage modes:
 - Tools are filtered by verified scopes (`toolsForScopes`): lib-express's session verifies the
   cookie or bearer, this server never decodes a JWT; an API key or unscoped session sees every
   tool and data-fair checks each call
+- Cookie sessions of any subject are accepted (an in-portal assistant relays its user's
+  cookies); a bearer must carry the MCP audience (`<site>/mcp-server`) and an NHI subject, and
+  decides when a request also has a cookie
+- OAuth discovery only on issuer sites (SD serves a complete authorization server discovery
+  there) without a path prefix: elsewhere the 401 challenge has no `resource_metadata`
 - The datasets server is a fixed map of platform tools to the historic names, not a scope
   selection (`src/datasets-server.ts`); on that route an unverifiable credential is dropped and
   the caller served anonymously

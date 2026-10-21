@@ -62,6 +62,22 @@ itself) and their scopes filter the platform server's tools; a session without s
 key see every tool. A request without forwarded headers (an in-cluster caller) is read with the
 main site as its site.
 
+A cookie session may be anyone's, so an assistant in a portal can act as its user by relaying
+the user's cookies. A bearer token must be an NHI's (non-human identity) and name this server in
+its audience (`<site>/mcp-server`, which simple-directory gives tokens requested for an MCP
+`resource`); a dashboard's user token is refused. When a request carries both, the bearer decides.
+
+MCP clients connect with OAuth on sites where simple-directory runs an authorization server (the
+main site and account main sites): a `401` from `/mcp` carries
+`WWW-Authenticate: Bearer resource_metadata="<site>/mcp-server/.well-known/oauth-protected-resource/mcp"`,
+and that metadata (RFC 9728) names the site's issuer. For example, with Claude Code:
+
+```sh
+claude mcp add --transport http datafair https://<site>/mcp-server/mcp
+```
+
+Other sites, and sites with a path prefix, offer no OAuth access: use an API key there.
+
 This server has no general rate limiting of its own. nginx limits callers on the way in, and every
 tool call that costs anything is a data-fair call, limited there by the caller's identity or by the IP
 this server forwards (`X-Forwarded-For`, with the `TRUSTED_FORWARDER` secret that lets the ingress trust
@@ -71,7 +87,8 @@ exception is `geocode_address`, which calls IGN: a global budget per instance an
 
 Routes:
 
-- `POST /mcp` — the platform server; `401` without credentials, and for a cookie or bearer that does not verify
+- `POST /mcp` — the platform server; `401` with a `WWW-Authenticate` challenge without credentials, and for a cookie or bearer that does not verify
+- `GET /.well-known/oauth-protected-resource/mcp` — the platform server's protected-resource metadata, on OAuth sites only (`404` elsewhere)
 - `POST /datasets/mcp` — the datasets server (see Compatibility). A cookie or bearer that does not verify is dropped, not forwarded, and the caller served anonymously; valid credentials are forwarded and their scopes filter the six tools
 - `GET /ai-catalog.json` — the site's AI Catalog (the MCP Server Card of the datasets server); route `/.well-known/ai-catalog.json` of every site host here
 - `GET /status` — services of the platform document, last refresh time, datasets tools missing from the document, active extra tools; in-cluster callers only
