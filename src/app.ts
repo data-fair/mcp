@@ -59,8 +59,8 @@ export function createApp (platform: Platform, dispatcher: SiteDispatcher, issue
   const resourceMetadata = async (req: Request) => (await issuerOfReq(req)) ? resourceMetadataUrl(siteOf(req)) : undefined
   let scopes: string[] | undefined
   platform.onChange(() => { scopes = undefined })
-  app.get(resourceMetadataRoute, async (req, res) => {
-    res.set('Access-Control-Allow-Origin', '*')
+  app.options(resourceMetadataRoute, cors)
+  app.get(resourceMetadataRoute, cors, async (req, res) => {
     const issuer = await issuerOfReq(req)
     if (!issuer) { res.status(404).type('text').send('no OAuth access on this site'); return }
     scopes ??= scopesSupported(platform.platform(undefined))

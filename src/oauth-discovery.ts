@@ -24,8 +24,10 @@ const completeFlow = (doc: any): doc is { issuer: string } =>
  * The issuer of a site, undefined when it is not an issuer site. Any failure (not found, not
  * JSON, timeout, unreachable) is a missing answer, cached for less time than a found one.
  */
-export function createIssuerLookup (options: { mainSiteUrl: string, dispatcher: SiteDispatcher, trustedForwarder?: string, timeoutMs?: number, ttlMs?: { found: number, missing: number } }): (siteOrigin: string) => Promise<string | undefined> {
+export function createIssuerLookup (options: { mainSiteUrl: string, dispatcher: SiteDispatcher, trustedForwarder?: string, timeoutMs?: number, ttlMs?: { found: number, missing: number }, maxSites?: number }): (siteOrigin: string) => Promise<string | undefined> {
   const timeoutMs = options.timeoutMs ?? 3000
+  // the site comes from a forwarded host anyone can send: the cache forgets the least recently used
+  const maxSites = options.maxSites ?? 1000
   const ttl = options.ttlMs ?? { found: 10 * 60_000, missing: 60_000 }
   const cache = new Map<string, { answer: Promise<string | undefined>, expires: number }>()
 
@@ -44,10 +46,12 @@ export function createIssuerLookup (options: { mainSiteUrl: string, dispatcher: 
 
   return (siteOrigin) => {
     const cached = cache.get(siteOrigin)
-    if (cached && cached.expires > Date.now()) return cached.answer
+    cache.delete(siteOrigin)
+    if (cached && cached.expires > Date.now()) { cache.set(siteOrigin, cached); return cached.answer }
     // the promise is cached at once, so concurrent cold lookups share one request
     const entry = { answer: probe(siteOrigin), expires: Infinity }
     cache.set(siteOrigin, entry)
+    if (cache.size > maxSites) cache.delete(cache.keys().next().value!)
     entry.answer.then(issuer => { entry.expires = Date.now() + (issuer ? ttl.found : ttl.missing) })
     return entry.answer
   }

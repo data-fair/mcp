@@ -77,6 +77,17 @@ describe('issuer lookup', () => {
     await new Promise(resolve => setTimeout(resolve, 80))
     assert.equal(await issuerOf('https://portal.test'), 'https://portal.test/simple-directory')
   })
+  it('keeps a bounded number of sites, forgetting the oldest', async () => {
+    const issuerOf = lookup({ maxSites: 2 })
+    await issuerOf('https://a.test')
+    await issuerOf('https://b.test')
+    await issuerOf('https://c.test')
+    const before = probes()
+    await issuerOf('https://c.test')
+    assert.equal(probes(), before, 'recent site still cached')
+    await issuerOf('https://a.test')
+    assert.equal(probes(), before + 1, 'oldest site asked again')
+  })
   it('keeps one answer per site', async () => {
     const issuerOf = lookup()
     assert.equal(await issuerOf('https://a.test'), 'https://a.test/simple-directory')

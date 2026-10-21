@@ -295,6 +295,12 @@ describe('app', () => {
       assert.deepEqual(doc.authorization_servers, ['https://portal.test/simple-directory'])
       assert.ok(doc.scopes_supported.includes('datasets:read'))
     })
+    it('answers the metadata preflight of a browser client', async () => {
+      const res = await fetch(`${base}/mcp-server/.well-known/oauth-protected-resource/mcp`, { method: 'OPTIONS', headers: { ...PROXY, origin: 'https://client.test', 'access-control-request-method': 'GET', 'access-control-request-headers': 'mcp-protocol-version' } })
+      assert.equal(res.status, 204)
+      assert.equal(res.headers.get('access-control-allow-origin'), '*')
+      assert.match(res.headers.get('access-control-allow-headers') ?? '', /Mcp-Protocol-Version/)
+    })
     it('follows the platform document in scopes_supported', async () => {
       site.setDoc(doc => {
         const op = Object.values<any>(doc.paths).map(p => p.get).find(get => get?.['x-agent'])
