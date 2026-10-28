@@ -40,6 +40,18 @@ describe('siteFetch', () => {
     assert.equal(body.headers['user-agent'], '@data-fair/mcp')
   })
 
+  // every data-fair write route checks the storage quota against Content-Length and answers a
+  // chunked body with a 411: the JSON body of a tool call must keep its length on the way through
+  it('sends a request body with its length, never chunked', async () => {
+    const main = `http://127.0.0.1:${port}`
+    const dispatcher = createDispatcher({ mainSiteUrl: main })
+    const f = siteFetch(main, { mainSiteUrl: main, dispatcher })
+    const payload = JSON.stringify({ nom: 'Gymnase' })
+    const body: any = await (await f(new Request(`${main}/data-fair/api/v1/datasets/d/lines`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: payload }))).json()
+    assert.equal(body.headers['content-length'], String(Buffer.byteLength(payload)))
+    assert.equal(body.headers['transfer-encoding'], undefined)
+  })
+
   it('leaves a foreign origin alone, and strips the caller\'s credentials for it', async () => {
     const main = 'https://main.test'
     const dispatcher = createDispatcher({ mainSiteUrl: main })

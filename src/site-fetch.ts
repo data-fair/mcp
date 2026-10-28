@@ -108,7 +108,11 @@ export function siteFetch (siteOrigin: string, options: SiteFetchOptions & { dis
       headers.delete('x-apikey')
       headers.delete('x-forwarded-for')
     }
-    const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : req.body
-    return fetch(url, { method: req.method, headers, body, signal: req.signal, dispatcher: options.dispatcher.dispatcher, duplex: body ? 'half' : undefined } as RequestInit)
+    // A body goes on as a stream only with its length declared (a file upload, which openapi-mcp
+    // sizes): a bare stream is sent chunked, and data-fair answers every write route with a 411.
+    // Anything else (a tool's JSON body) is read whole, so it keeps its length.
+    let body: ReadableStream | ArrayBuffer | undefined
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) body = headers.has('content-length') ? req.body : await req.arrayBuffer()
+    return fetch(url, { method: req.method, headers, body, signal: req.signal, dispatcher: options.dispatcher.dispatcher, duplex: body instanceof ReadableStream ? 'half' : undefined } as RequestInit)
   }) as typeof fetch
 }
