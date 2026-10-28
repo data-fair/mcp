@@ -105,6 +105,8 @@ export function siteFetch (siteOrigin: string, options: SiteFetchOptions & { dis
       // the library merges the caller's headers into every tool call before siteFetch runs,
       // so a service document pointing a tool at some other host must not receive them.
       headers.delete('cookie')
+      headers.delete('authorization')
+      headers.delete('proxy-authorization')
       headers.delete('x-apikey')
       headers.delete('x-forwarded-for')
     }
