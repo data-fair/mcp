@@ -1,0 +1,63 @@
+/**
+ * From the incoming MCP request to the context every tool call carries: which site the
+ * caller came through, and who the caller is. Nothing here is trusted for authorization —
+ * data-fair's permissions decide what a caller may do; this only says where the upstream
+ * call goes and which identity data-fair will see.
+ */
+import { createHash } from 'node:crypto'
+import type { IncomingMessage } from 'node:http'
+import type { CallContext } from '@data-fair/openapi-mcp'
+import { reqIp } from '@data-fair/lib-express/req-origin.js'
+import type { ApiConfig } from '#config'
+import { siteFetch, type SiteDispatcher } from './site-fetch.ts'
+
+/** host, optionally with a port; case-insensitive, no scheme, no path — rejects anything else */
+const HOST_RE = /^[a-z0-9.-]+(:\d{1,5})?$/i
+
+/** The de-facto standard the reverse proxy sets; the same rule as lib-express's reqOrigin, without throwing. */
+export function originFromForwarded (headers: Headers): string | undefined {
+  const host = headers.get('x-forwarded-host')
+  const proto = headers.get('x-forwarded-proto')
+  if (!host || !proto) return undefined
+  if (proto !== 'http' && proto !== 'https') return undefined
+  if (!HOST_RE.test(host)) return undefined
+  const port = headers.get('x-forwarded-port')
+  const explicit = port && !(port === '443' && proto === 'https') && !(port === '80' && proto === 'http')
+  return `${proto}://${host}${explicit ? ':' + port : ''}`
+}
+
+/** The site a request came through: its forwarded origin, else the main site (an in-cluster caller). */
+export function siteOriginOf (source: Request | Headers | undefined, mainSiteUrl: string): string {
+  const headers = source instanceof Headers ? source : source?.headers
+  return (headers && originFromForwarded(headers)) ?? mainSiteUrl
+}
+
+/** Who a caller is, as far as its credentials say: a hash of its cookie, else of its bearer authorization, else of its API key. */
+export function credentialIdentity (credentials: { cookie?: string | null, authorization?: string | null, apiKey?: string | null }): string | undefined {
+  const secret = credentials.cookie || credentials.authorization || credentials.apiKey
+  return secret ? createHash('sha256').update(secret).digest('hex') : undefined
+}
+
+export function requestContext (options: { config: Pick<ApiConfig, 'mainSiteUrl' | 'trustedForwarder'>, dispatcher: SiteDispatcher }): (request: Request | undefined) => CallContext {
+  const { config, dispatcher } = options
+  return (request) => {
+    const headers = request?.headers ?? new Headers()
+    const siteOrigin = siteOriginOf(request, config.mainSiteUrl!)
+    const forwarded: Record<string, string> = {}
+    const cookie = headers.get('cookie')
+    const authorization = headers.get('authorization')
+    const apiKey = headers.get('x-apikey') ?? headers.get('x-api-key')
+    if (cookie) forwarded.cookie = cookie
+    if (authorization) forwarded.authorization = authorization
+    if (apiKey) forwarded['x-apikey'] = apiKey
+    // the caller's IP, forwarded so the stack limits it as if it called directly; none for a caller
+    // acting for nobody's address (a planned task), which the stack then limits by its identity
+    const clientIp = reqIp({ headers: Object.fromEntries(headers) } as IncomingMessage, { optional: true })
+    if (clientIp) forwarded['x-forwarded-for'] = clientIp
+    return {
+      fetch: siteFetch(siteOrigin, { mainSiteUrl: config.mainSiteUrl!, dispatcher, trustedForwarder: config.trustedForwarder }),
+      headers: Object.keys(forwarded).length ? forwarded : undefined,
+      identity: credentialIdentity({ cookie, authorization, apiKey })
+    }
+  }
+}

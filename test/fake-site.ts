@@ -1,0 +1,91 @@
+/**
+ * A site for the tests: the merged platform document (the fixture origin replaced by this
+ * site's), the directory's JWK sets and session, the skill files and canned dataset responses
+ * that echo the request's host, cookies and forwarded headers — so assertions read what
+ * actually reached the API.
+ */
+import { createServer, type Server } from 'node:http'
+import { readFileSync } from 'node:fs'
+import { jwks } from './tokens.ts'
+
+export interface FakeSite { origin: string, port: number, hits: { url: string, headers: Record<string, string | string[] | undefined> }[], uploads: { headers: Record<string, string | string[] | undefined>, body: Buffer }[], setDoc (patch: (doc: any) => void): void, setSession (state: object | undefined): void, setDiscovery (answer: object | number | 'hang' | 'default' | undefined): void, failSession (mode: number | 'text' | 'null' | undefined): void, failDoc (status: number | undefined): void, close (): Promise<void> }
+
+export async function startFakeSite (): Promise<FakeSite> {
+  let doc = JSON.parse(readFileSync(new URL('./fixtures/platform-api-docs.json', import.meta.url), 'utf8'))
+  const keys = jwks()
+  let session: object = {}
+  let sessionFailure: number | 'text' | 'null' | undefined
+  let docFailure: number | undefined
+  // SD's authorization server discovery: 'default' a complete one issued on the requested site
+  let discovery: object | number | 'hang' | 'default' = 'default'
+  const FIXTURE_ORIGIN = 'http://fixture.test'
+  let etag = 1
+  const hits: FakeSite['hits'] = []
+  const uploads: FakeSite['uploads'] = []
+  let origin = ''
+  const server: Server = createServer((req, res) => {
+    const url = new URL(req.url!, origin)
+    hits.push({ url: req.url!, headers: req.headers as any })
+    const json = (body: unknown, headers: Record<string, string> = {}) => { res.writeHead(200, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(body)) }
+    if (url.pathname === '/simple-directory/.well-known/jwks.json') return json(keys.session)
+    if (url.pathname === '/simple-directory/.well-known/scoped-jwks.json') return json(keys.scoped)
+    if (url.pathname === '/simple-directory/.well-known/oauth-authorization-server') {
+      if (discovery === 'hang') return
+      if (typeof discovery === 'number') { res.writeHead(discovery); return res.end('no discovery') }
+      if (discovery !== 'default') return json(discovery)
+      const forwarded = req.headers['x-forwarded-host'] ? `${req.headers['x-forwarded-proto'] ?? 'https'}://${req.headers['x-forwarded-host']}` : origin
+      const issuer = forwarded + '/simple-directory'
+      return json({ issuer, authorization_endpoint: issuer + '/api/oauth/authorize', token_endpoint: issuer + '/api/oauth/token', registration_endpoint: issuer + '/api/oauth/register', client_id_metadata_document_supported: true })
+    }
+    if (url.pathname === '/simple-directory/api/auth/my-session') {
+      if (typeof sessionFailure === 'number') { res.writeHead(sessionFailure); return res.end('failed') }
+      if (sessionFailure === 'text') { res.writeHead(200, { 'content-type': 'text/html' }); return res.end('<html>login</html>') }
+      if (sessionFailure === 'null') return json(null)
+      return json(session)
+    }
+    const skill = url.pathname.match(/^\/data-fair\/api\/v1\/agents\/skills\/([a-z0-9-]+)\.md$/)
+    if (skill) {
+      try {
+        const body = readFileSync(new URL(`./fixtures/data-fair-skills/${skill[1]}.md`, import.meta.url), 'utf8')
+        res.writeHead(200, { 'content-type': 'text/markdown' }); return res.end(body)
+      } catch { res.writeHead(404); return res.end('unknown skill') }
+    }
+    if (url.pathname === '/data-fair/api/v1/platform/api-docs.json') {
+      if (docFailure) { res.writeHead(docFailure); return res.end('doc unavailable') }
+      if (req.headers['if-none-match'] === `"${etag}"`) { res.writeHead(304); return res.end() }
+      // generated against a placeholder origin: every reference points at this site
+      return json(JSON.parse(JSON.stringify(doc).replaceAll(FIXTURE_ORIGIN, origin)), { etag: `"${etag}"` })
+    }
+    // a dataset upload: recorded with its headers and exact bytes, as data-fair would receive it
+    if (req.method === 'POST' && url.pathname === '/data-fair/api/v1/datasets') {
+      const chunks: Buffer[] = []
+      req.on('data', (c: Buffer) => chunks.push(c))
+      req.on('end', () => {
+        uploads.push({ headers: req.headers as any, body: Buffer.concat(chunks) })
+        res.writeHead(201, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ id: 'ds-new', status: 'created' }))
+      })
+      return
+    }
+    // the account listing and the catalog listing answer the same canned page
+    if (url.pathname === '/data-fair/api/v1/datasets' || url.pathname === '/data-fair/api/v1/catalog/datasets') {
+      return json({ count: 1, results: [{ id: 'ds1', slug: 'ds1', title: `Seen by ${req.headers['x-forwarded-host'] ?? req.headers.host}`, summary: `cookie=${req.headers.cookie ?? ''} apikey=${req.headers['x-apikey'] ?? ''}`, count: 1, status: 'finalized', updatedAt: '2026-01-01T00:00:00Z', page: `${origin}/datasets/ds1` }] })
+    }
+    res.writeHead(404); res.end('not found ' + url.pathname)
+  })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  const port = (server.address() as any).port
+  origin = `http://127.0.0.1:${port}`
+  return {
+    origin,
+    port,
+    hits,
+    uploads,
+    setDoc (patch) { doc = structuredClone(doc); patch(doc); etag++ },
+    setSession (state) { session = state ?? {} },
+    failSession (mode) { sessionFailure = mode },
+    setDiscovery (answer) { discovery = answer ?? 404 },
+    failDoc (status) { docFailure = status },
+    close: () => new Promise<void>(resolve => { server.close(() => resolve()); server.closeAllConnections() })
+  }
+}

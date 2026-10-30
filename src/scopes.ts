@@ -1,0 +1,103 @@
+/**
+ * The caller's credentials, checked before the MCP handler: a cookie session or a bearer access
+ * token is verified by lib-express's session (the server never decodes a JWT itself) and its
+ * scopes reach the handler in an internal header, which a client can never set since it is
+ * always deleted first. An API key is passed on unscoped: data-fair checks it.
+ */
+import type { IncomingMessage } from 'node:http'
+import type { Request as ExpressRequest, RequestHandler, Response } from 'express'
+import { session, markScopeChecked, httpError } from '@data-fair/lib-express'
+import { siteFetch, type SiteDispatcher } from './site-fetch.ts'
+
+export const SCOPES_HEADER = 'x-mcp-scopes'
+
+/** Where the server is mounted on a site: a bearer must name `<siteUrl>/mcp-server` in its audience. */
+export const MCP_PATH = '/mcp-server'
+
+/**
+ * The session reader's options: scope-aware, and a bearer is addressed to this server (SD gives
+ * an MCP token the MCP and the site API audiences; a dashboard token, the site API only).
+ */
+export const sessionOptions = { scopeAware: true, audiences: (siteUrl: string) => [siteUrl + MCP_PATH] }
+
+const hasBearer = (req: IncomingMessage) => /^bearer(\s|$)/i.test(req.headers.authorization ?? '')
+
+/** a cookie session or a bearer access token, the credentials a session is read from */
+const hasSessionCredential = (req: IncomingMessage) => /(^|;\s*)id_token=/.test(req.headers.cookie ?? '') || hasBearer(req)
+
+/**
+ * `required`: a caller without credentials is refused, a credential that does not verify fails
+ * with its error (401 for a bad token, 5xx when the directory's keys cannot be read). A 401 is a
+ * challenge (RFC 6750, RFC 9728): `WWW-Authenticate: Bearer`, `error="invalid_token"` for a
+ * refused bearer, and the metadata an MCP client starts OAuth from when `resourceMetadata`
+ * gives one. Not `required`: a credential that does not verify is dropped and the caller served
+ * anonymously, with no challenge.
+ */
+export function credentials (options: { required: boolean, mainSiteUrl: string, resourceMetadata?: (req: ExpressRequest) => Promise<string | undefined> }): RequestHandler {
+  const main = new URL(options.mainSiteUrl)
+  const challenge = async (req: ExpressRequest, res: Response, invalidToken: boolean) => {
+    const params = [invalidToken && 'error="invalid_token"', await options.resourceMetadata?.(req).then(url => url && `resource_metadata="${url}"`)].filter(Boolean)
+    res.setHeader('WWW-Authenticate', ['Bearer', params.join(', ')].filter(Boolean).join(' '))
+  }
+  return async (req, res, next) => {
+    delete req.headers[SCOPES_HEADER]
+    if (!hasSessionCredential(req)) {
+      if (options.required && !req.headers['x-apikey'] && !req.headers['x-api-key']) {
+        await challenge(req, res, false)
+        res.status(401).type('text').send('credentials required')
+        return
+      }
+      return next()
+    }
+    // an in-cluster caller has no forwarded headers: its bearer is addressed to the main site
+    const sessionReq = req.headers['x-forwarded-host']
+      ? req
+      : { headers: { ...req.headers, 'x-forwarded-host': main.host, 'x-forwarded-proto': main.protocol.replace(':', '') } } as unknown as IncomingMessage
+    // the scopes are checked per tool, by the handler that reads them
+    markScopeChecked(sessionReq)
+    let scopes: string[] | undefined
+    try {
+      const state = await session.req(sessionReq)
+      // an id_token cookie without its signature reads as no session at all: not a verified caller
+      if (!state.user) throw httpError(401, 'invalid session')
+      // the bearer is read first and decides: on this server it is an NHI's, never a user's
+      if (hasBearer(req) && !state.user.nhi) throw httpError(401, 'invalid token')
+      scopes = state.scopes
+    } catch (err) {
+      if (options.required) {
+        if ((err as { status?: number }).status === 401) await challenge(req, res, hasBearer(req))
+        throw err
+      }
+      delete req.headers.cookie
+      delete req.headers.authorization
+      return next()
+    }
+    if (scopes) req.headers[SCOPES_HEADER] = JSON.stringify(scopes)
+    next()
+  }
+}
+
+/** The scopes the credentials middleware verified, undefined for an unscoped or anonymous caller. */
+export function scopesOf (request: Request | undefined): string[] | undefined {
+  const header = request?.headers.get(SCOPES_HEADER)
+  return header ? JSON.parse(header) : undefined
+}
+
+/**
+ * The stdio caller's session: an API key is the identity (data-fair checks it per call, no
+ * scopes to read); otherwise the main site's my-session answers for whatever the environment
+ * injects (a proxy adding a session). No forwarder secret is sent.
+ */
+export async function stdioSession (options: { mainSiteUrl: string, dispatcher: SiteDispatcher, apiKey?: string }): Promise<{ authenticated: boolean, scopes?: string[] }> {
+  if (options.apiKey) return { authenticated: true }
+  // any failure (unreachable, non-2xx, not JSON) reads as no session: the datasets server still serves anonymously
+  try {
+    const fetch = siteFetch(options.mainSiteUrl, { mainSiteUrl: options.mainSiteUrl, dispatcher: options.dispatcher })
+    const res = await fetch(`${options.mainSiteUrl}/simple-directory/api/auth/my-session`)
+    if (!res.ok) return { authenticated: false }
+    const body = await res.json() as { user?: unknown, scopes?: string[] } | null
+    return body?.user ? { authenticated: true, scopes: body.scopes } : { authenticated: false }
+  } catch {
+    return { authenticated: false }
+  }
+}

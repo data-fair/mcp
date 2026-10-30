@@ -1,0 +1,314 @@
+import { describe, it, before, after } from 'node:test'
+import assert from 'node:assert/strict'
+import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import { startFakeSite, type FakeSite } from '../test/fake-site.ts'
+import { bearerFor, cookieFor, nhiClaims, userClaims, USER } from '../test/tokens.ts'
+import config from '#config'
+import type { Runtime } from './server.ts'
+
+const PROXY = { 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https', 'x-forwarded-for': '203.0.113.7' }
+const DATASETS_NAMES = ['list_datasets', 'describe_dataset', 'search_data', 'get_field_values', 'aggregate_data', 'calculate_metric', 'geocode_address']
+
+describe('app', () => {
+  let site: FakeSite, store: Server, storeOrigin: string, http: Server, base: string, runtime: Runtime
+  const storeHeaders: Record<string, string | string[] | undefined>[] = []
+  const connect = async (path: string, headers: Record<string, string> = {}, options: ConstructorParameters<typeof Client>[1] = {}) => {
+    const client = new Client({ name: 'c', version: '0' }, { versionNegotiation: { mode: 'auto' }, ...options })
+    await client.connect(new StreamableHTTPClientTransport(new URL(base + path), { requestInit: { headers } }))
+    return client
+  }
+  const names = async (path: string, headers: Record<string, string> = PROXY) => {
+    const client = await connect(path, headers)
+    try { return (await client.listTools()).tools.map(t => t.name) } finally { await client.close() }
+  }
+  const listen = async (handler: (req: IncomingMessage, res: ServerResponse) => void) => {
+    const server = createServer(handler)
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    return { server, origin: `http://127.0.0.1:${(server.address() as any).port}` }
+  }
+  const configure = (files: string[]) => Object.assign(config, {
+    mainSiteUrl: site.origin,
+    portalUrl: undefined,
+    privateDirectoryUrl: site.origin + '/simple-directory',
+    refreshInterval: 0,
+    trustedForwarder: 'secret',
+    upstreamProxyHost: `127.0.0.1:${site.port}`,
+    extraTools: { ...config.extraTools, geocodeAddress: { ...config.extraTools.geocodeAddress, active: true } },
+    files: { urlPrefixes: files }
+  })
+
+  before(async () => {
+    site = await startFakeSite();
+    ({ server: store, origin: storeOrigin } = await listen((req, res) => {
+      storeHeaders.push(req.headers)
+      res.writeHead(200, { 'content-type': 'text/csv', 'content-length': 8 })
+      res.end('a,b\n1,2\n')
+    }))
+    configure([`${storeOrigin}/agent-files/`])
+    const { createRuntime } = await import('./server.ts')
+    runtime = await createRuntime(config);
+    ({ server: http, origin: base } = await listen(runtime.app))
+  })
+  after(async () => { runtime.platform.close(); http.close(); store.close(); await site.close() })
+
+  it('refuses /mcp without credentials', async () => {
+    const res = await fetch(`${base}/mcp-server/mcp`, { method: 'POST', headers: { ...PROXY, 'content-type': 'application/json' }, body: '{}' })
+    assert.equal(res.status, 401)
+  })
+  it('serves /mcp to an unscoped session and calls the requesting site with its identity', async () => {
+    const cookie = cookieFor(USER)
+    const client = await connect('/mcp-server/mcp', { ...PROXY, cookie })
+    try {
+      const { tools } = await client.listTools()
+      assert.match(tools[0].name, /^datafair_/)
+      assert.ok(tools.some(t => t.name === 'geocode_address'))
+      assert.ok(tools.some(t => t.name === 'datafair_update_dataset'), 'unscoped: every tool')
+      const res: any = await client.callTool({ name: 'datafair_list_datasets', arguments: {} })
+      assert.equal(res.isError, undefined, res.content[0].text)
+      assert.match(res.content[0].text, /cookie=id_token=/, 'the identity reaches the API')
+      assert.match(res.content[0].text, /Seen by portal\.test/, 'the call goes to the requesting site')
+      const hit = site.hits.at(-1)!
+      assert.equal(hit.headers.referer, 'https://portal.test/mcp')
+      assert.equal(hit.headers['x-trusted-forwarder'], 'secret')
+      assert.equal(hit.headers['x-forwarded-host'], 'portal.test')
+      assert.equal(hit.headers.cookie, cookie)
+    } finally { await client.close() }
+  })
+  it('cuts /mcp by the bearer\'s scopes and forwards the bearer', async () => {
+    const authorization = 'Bearer ' + bearerFor(nhiClaims('datasets:read', 'https://portal.test'))
+    const client = await connect('/mcp-server/mcp', { ...PROXY, authorization })
+    try {
+      const tools = (await client.listTools()).tools.map(t => t.name)
+      assert.ok(tools.includes('datafair_list_datasets'))
+      assert.ok(!tools.includes('datafair_update_dataset'))
+      assert.ok(tools.includes('geocode_address'))
+      const res: any = await client.callTool({ name: 'datafair_list_datasets', arguments: {} })
+      assert.equal(res.isError, undefined, res.content[0].text)
+      assert.equal(site.hits.at(-1)!.headers.authorization, authorization)
+    } finally { await client.close() }
+  })
+  it('refuses a bearer addressed to another site on /mcp', async () => {
+    const authorization = 'Bearer ' + bearerFor(nhiClaims('datasets:read', 'https://other.test'))
+    await assert.rejects(names('/mcp-server/mcp', { ...PROXY, authorization }))
+  })
+  it('serves the datasets server anonymously with its seven names', async () => {
+    assert.deepEqual(await names('/mcp-server/datasets/mcp'), DATASETS_NAMES)
+  })
+  it('cuts the datasets server by scopes too', async () => {
+    const authorization = 'Bearer ' + bearerFor(nhiClaims('applications:read', 'https://portal.test'))
+    assert.deepEqual(await names('/mcp-server/datasets/mcp', { ...PROXY, authorization }), ['geocode_address'])
+  })
+  it('serves the datasets server anonymously to a credential that does not verify', async () => {
+    const authorization = 'Bearer ' + bearerFor(nhiClaims('applications:read', 'https://other.test'))
+    assert.deepEqual(await names('/mcp-server/datasets/mcp', { ...PROXY, authorization }), DATASETS_NAMES)
+  })
+  it('serves the datasets server anonymously to a bearer without the MCP audience', async () => {
+    // accepted, its scopes would cut the server down to geocode_address
+    const authorization = 'Bearer ' + bearerFor(nhiClaims('applications:read', 'https://portal.test', 'https://portal.test'))
+    assert.deepEqual(await names('/mcp-server/datasets/mcp', { ...PROXY, authorization }), DATASETS_NAMES)
+  })
+  it('refuses a dashboard bearer on /mcp', async () => {
+    const authorization = 'Bearer ' + bearerFor(userClaims('datasets:read', 'https://portal.test'))
+    await assert.rejects(names('/mcp-server/mcp', { ...PROXY, authorization }))
+  })
+  it('ignores a client-sent scopes header and drops an expired cookie on the datasets server', async () => {
+    const headers = { ...PROXY, cookie: cookieFor(USER, { expiresIn: -1 }), 'x-mcp-scopes': '[]' }
+    const client = await connect('/mcp-server/datasets/mcp', headers)
+    try {
+      assert.deepEqual((await client.listTools()).tools.map(t => t.name), DATASETS_NAMES)
+      const res: any = await client.callTool({ name: 'list_datasets', arguments: {} })
+      assert.equal(res.isError, undefined, res.content[0].text)
+      assert.doesNotMatch(res.content[0].text, /cookie=id_token/)
+      assert.equal(site.hits.at(-1)!.headers.cookie, undefined)
+    } finally { await client.close() }
+  })
+  it('ignores a client-sent scopes header on /mcp with an API key', async () => {
+    const all = await names('/mcp-server/mcp', { ...PROXY, cookie: cookieFor(USER) })
+    assert.deepEqual(await names('/mcp-server/mcp', { ...PROXY, 'x-apikey': 'key', 'x-mcp-scopes': '[]' }), all)
+  })
+  it('serves an in-cluster caller on the main site', async () => {
+    const client = await connect('/mcp', { 'x-apikey': 'key' })
+    try {
+      const res: any = await client.callTool({ name: 'datafair_list_datasets', arguments: {} })
+      assert.match(res.content[0].text, /Seen by 127\.0\.0\.1:\d+/)
+      assert.match(res.content[0].text, /apikey=key/)
+    } finally { await client.close() }
+  })
+  it('hands out file links on the site the call came through', async () => {
+    const onPortal = await connect('/mcp-server/mcp', { ...PROXY, cookie: cookieFor(USER) })
+    try {
+      const res: any = await onPortal.callTool({ name: 'datafair_download_dataset_file', arguments: { datasetId: 'ds1' } })
+      const link = res.content.find((c: any) => c.type === 'resource_link')
+      assert.equal(link.uri, 'https://portal.test/data-fair/api/v1/datasets/ds1/raw')
+      assert.ok(res.content[0].text.includes('https://portal.test/data-fair/api/v1/datasets/ds1/raw'))
+      assert.ok(!res.content[0].text.includes(site.origin), 'no main-site URL left in the text')
+    } finally { await onPortal.close() }
+    const inCluster = await connect('/mcp', { 'x-apikey': 'key' })
+    try {
+      const res: any = await inCluster.callTool({ name: 'datafair_download_dataset_file', arguments: { datasetId: 'ds1' } })
+      assert.equal(res.content.find((c: any) => c.type === 'resource_link').uri, `${site.origin}/data-fair/api/v1/datasets/ds1/raw`)
+    } finally { await inCluster.close() }
+  })
+  it('uploads a file from the store through the site, with an exact length and none of the caller credentials sent to the store', async () => {
+    const cookie = cookieFor(USER)
+    const client = await connect('/mcp-server/mcp', { ...PROXY, cookie })
+    try {
+      const tool = (await client.listTools()).tools.find(t => t.name === 'datafair_create_dataset_from_file')
+      assert.ok(tool, 'offered once a file store is configured')
+      const before = storeHeaders.length
+      const res: any = await client.callTool({ name: 'datafair_create_dataset_from_file', arguments: { file: `${storeOrigin}/agent-files/report.csv?X-Amz-Signature=sig`, title: 'Report' } })
+      assert.equal(res.isError, undefined, res.content[0].text)
+      const upload = site.uploads.at(-1)!
+      assert.equal(Number(upload.headers['content-length']), upload.body.length, 'an exact Content-Length')
+      assert.equal(upload.headers['transfer-encoding'], undefined, 'never chunked: data-fair answers 411')
+      assert.equal(upload.headers.cookie, cookie, 'the caller identity reaches the API')
+      assert.equal(upload.headers['x-forwarded-host'], 'portal.test', 'through the requesting site')
+      assert.match(upload.body.toString(), /filename="report.csv"/)
+      assert.match(upload.body.toString(), /a,b\n1,2\n/)
+      assert.equal(storeHeaders.length, before + 1)
+      for (const name of ['cookie', 'x-apikey', 'x-trusted-forwarder', 'authorization']) assert.equal(storeHeaders.at(-1)![name], undefined, `${name} never reaches the file store`)
+    } finally { await client.close() }
+  })
+  it('offers no upload tool without a file store, and the download tools regardless', async () => {
+    configure([])
+    const { createRuntime } = await import('./server.ts')
+    const other = await createRuntime(config)
+    const { server, origin } = await listen(other.app)
+    try {
+      const client = new Client({ name: 'c', version: '0' }, { versionNegotiation: { mode: 'auto' } })
+      await client.connect(new StreamableHTTPClientTransport(new URL(origin + '/mcp-server/mcp'), { requestInit: { headers: { ...PROXY, cookie: cookieFor(USER) } } }))
+      const tools = (await client.listTools()).tools.map(t => t.name)
+      await client.close()
+      for (const name of ['datafair_create_dataset_from_file', 'datafair_replace_dataset_file']) assert.ok(!tools.includes(name), name)
+      for (const name of ['datafair_download_dataset_file', 'datafair_download_dataset_converted_file', 'datafair_export_data']) assert.ok(tools.includes(name), name)
+    } finally {
+      other.platform.close()
+      server.close()
+      configure([`${storeOrigin}/agent-files/`])
+    }
+  })
+  it('notifies tools/list_changed after a document change', async () => {
+    let resolveChanged: () => void
+    const changed = new Promise<void>(resolve => { resolveChanged = resolve })
+    const client = await connect('/mcp-server/datasets/mcp', PROXY, { listChanged: { tools: { autoRefresh: false, debounceMs: 0, onChanged: () => resolveChanged() } } })
+    try {
+      await client.listTools()
+      site.setDoc(doc => { delete doc.paths['/data-fair/api/v1/datasets/{id}/metric_agg'].get['x-agent'] })
+      assert.equal(await runtime.platform.refresh(), true)
+      await Promise.race([changed, new Promise((_resolve, reject) => setTimeout(() => reject(new Error('no tools/list_changed')), 2000))])
+      assert.ok(!(await client.listTools()).tools.some(t => t.name === 'calculate_metric'))
+    } finally { await client.close() }
+  })
+  it('publishes the datasets server card in the AI catalog', async () => {
+    const res = await fetch(`${base}/mcp-server/ai-catalog.json`, { headers: PROXY })
+    assert.equal(res.status, 200)
+    assert.match(res.headers.get('content-type') ?? '', /^application\/ai-catalog\+json/)
+    assert.equal(res.headers.get('access-control-allow-origin'), '*')
+    assert.equal(res.headers.get('vary'), 'X-Forwarded-Host')
+    const doc: any = await res.json()
+    assert.equal(doc.specVersion, '1.0')
+    assert.equal(doc.entries.length, 1)
+    assert.equal(doc.entries[0].type, 'application/mcp-server-card+json')
+    assert.equal(doc.entries[0].identifier, 'urn:air:portal.test:mcp:datasets')
+    const card = doc.entries[0].data
+    assert.equal(card.$schema, 'https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json')
+    assert.equal(card.name, 'fr.data-fair/datasets')
+    assert.ok(card.description)
+    assert.deepEqual(card.remotes, [{ type: 'streamable-http', url: 'https://portal.test/mcp-server/datasets/mcp' }])
+  })
+  it('no longer serves /profiles nor /v0/servers', async () => {
+    for (const path of ['/mcp-server/profiles', '/mcp-server/v0/servers']) {
+      assert.equal((await fetch(base + path, { headers: PROXY })).status, 404, path)
+    }
+  })
+  it('keeps /status for in-cluster callers', async () => {
+    assert.equal((await fetch(`${base}/mcp-server/status`, { headers: PROXY })).status, 421)
+    const status: any = await (await fetch(`${base}/status`)).json()
+    assert.equal(status.mainSiteUrl, site.origin)
+    assert.deepEqual(status.services.map((s: any) => s.id), ['datafair'])
+    assert.ok(Array.isArray(status.missingDatasetsTools))
+    assert.ok(status.extraTools)
+  })
+  it('sets the CORS allow-headers clients need for the session id, the API key and a bearer', async () => {
+    const res = await fetch(`${base}/mcp-server/mcp`, { method: 'OPTIONS' })
+    assert.equal(res.status, 204)
+    const allow = res.headers.get('access-control-allow-headers') ?? ''
+    assert.match(allow, /x-apiKey/)
+    assert.match(allow, /Mcp-Session-Id/)
+    assert.match(allow, /Authorization/)
+  })
+
+  describe('oauth discovery', () => {
+    const METADATA = 'https://portal.test/mcp-server/.well-known/oauth-protected-resource/mcp'
+    const post = (path: string, headers: Record<string, string> = {}) =>
+      fetch(base + path, { method: 'POST', headers: { ...PROXY, 'content-type': 'application/json', ...headers }, body: '{}' })
+    // a fresh site each time, the lookup caches per site
+    let n = 0
+    const fresh = () => ({ ...PROXY, 'x-forwarded-host': `site${++n}.test` })
+
+    it('points a caller without credentials at the metadata', async () => {
+      const res = await post('/mcp-server/mcp')
+      assert.equal(res.status, 401)
+      assert.equal(res.headers.get('www-authenticate'), `Bearer resource_metadata="${METADATA}"`)
+      assert.match(res.headers.get('access-control-expose-headers') ?? '', /WWW-Authenticate/)
+    })
+    it('marks a refused bearer as an invalid token', async () => {
+      const res = await post('/mcp-server/mcp', { authorization: 'Bearer ' + bearerFor(nhiClaims('datasets:read', 'https://portal.test', 'https://portal.test')) })
+      assert.equal(res.status, 401)
+      assert.equal(res.headers.get('www-authenticate'), `Bearer error="invalid_token", resource_metadata="${METADATA}"`)
+    })
+    it('does not mark a refused cookie as an invalid token', async () => {
+      const res = await post('/mcp-server/mcp', { cookie: cookieFor(USER, { expiresIn: -1 }) })
+      assert.equal(res.status, 401)
+      assert.equal(res.headers.get('www-authenticate'), `Bearer resource_metadata="${METADATA}"`)
+    })
+    it('offers no metadata on a site that is not an issuer site', async () => {
+      site.setDiscovery(404)
+      try {
+        const headers = fresh()
+        const res = await post('/mcp-server/mcp', headers)
+        assert.equal(res.status, 401)
+        assert.equal(res.headers.get('www-authenticate'), 'Bearer')
+        const metadata = await fetch(`${base}/mcp-server/.well-known/oauth-protected-resource/mcp`, { headers })
+        assert.equal(metadata.status, 404)
+      } finally { site.setDiscovery('default') }
+    })
+    it('offers no metadata on a site with a path prefix', async () => {
+      const res = await post('/portal/mcp-server/mcp')
+      assert.equal(res.status, 401)
+      assert.equal(res.headers.get('www-authenticate'), 'Bearer')
+      const metadata = await fetch(`${base}/portal/mcp-server/.well-known/oauth-protected-resource/mcp`, { headers: PROXY })
+      assert.equal(metadata.status, 404)
+    })
+    it('never sends a challenge from the datasets server', async () => {
+      const res = await post('/mcp-server/datasets/mcp', { authorization: 'Bearer ' + bearerFor(nhiClaims('datasets:read', 'https://portal.test', 'https://portal.test')) })
+      assert.notEqual(res.status, 401)
+      assert.equal(res.headers.get('www-authenticate'), null)
+    })
+    it('serves the metadata of an issuer site', async () => {
+      const res = await fetch(`${base}/mcp-server/.well-known/oauth-protected-resource/mcp`, { headers: PROXY })
+      assert.equal(res.status, 200)
+      assert.equal(res.headers.get('access-control-allow-origin'), '*')
+      const doc: any = await res.json()
+      assert.equal(doc.resource, 'https://portal.test/mcp-server/mcp')
+      assert.deepEqual(doc.authorization_servers, ['https://portal.test/simple-directory'])
+      assert.ok(doc.scopes_supported.includes('datasets:read'))
+    })
+    it('answers the metadata preflight of a browser client', async () => {
+      const res = await fetch(`${base}/mcp-server/.well-known/oauth-protected-resource/mcp`, { method: 'OPTIONS', headers: { ...PROXY, origin: 'https://client.test', 'access-control-request-method': 'GET', 'access-control-request-headers': 'mcp-protocol-version' } })
+      assert.equal(res.status, 204)
+      assert.equal(res.headers.get('access-control-allow-origin'), '*')
+      assert.match(res.headers.get('access-control-allow-headers') ?? '', /Mcp-Protocol-Version/)
+    })
+    it('follows the platform document in scopes_supported', async () => {
+      site.setDoc(doc => {
+        const op = Object.values<any>(doc.paths).map(p => p.get).find(get => get?.['x-agent'])
+        op.security = [{ oauth2: ['fresh:scope'] }]
+      })
+      assert.equal(await runtime.platform.refresh(), true)
+      const doc: any = await (await fetch(`${base}/mcp-server/.well-known/oauth-protected-resource/mcp`, { headers: fresh() })).json()
+      assert.ok(doc.scopes_supported.includes('fresh:scope'))
+    })
+  })
+})

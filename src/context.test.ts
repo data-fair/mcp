@@ -1,0 +1,68 @@
+import { describe, it } from 'node:test'
+import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { originFromForwarded, requestContext, siteOriginOf } from './context.ts'
+import { createDispatcher } from './site-fetch.ts'
+
+const config: any = { mode: 'public', mainSiteUrl: 'https://main.test', trustedForwarder: 's' }
+const dispatcher = createDispatcher({ mainSiteUrl: config.mainSiteUrl })
+const ctxOf = (headers: Record<string, string>) => requestContext({ config, dispatcher })(new Request('http://x/mcp', { headers }))
+
+describe('context', () => {
+  it('forwards the caller\'s IP upstream when the request carries one', () => {
+    assert.equal(ctxOf({ 'x-forwarded-for': '203.0.113.7' }).headers?.['x-forwarded-for'], '203.0.113.7')
+  })
+  it('forwards no IP for a caller acting for nobody\'s address (a planned task)', () => {
+    assert.equal(ctxOf({ cookie: 'id_token=a' }).headers?.['x-forwarded-for'], undefined)
+  })
+  it('reads the site origin from the forwarded headers, port included when non-default', () => {
+    assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https' })), 'https://portal.test')
+    assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'http', 'x-forwarded-port': '8080' })), 'http://portal.test:8080')
+    assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https', 'x-forwarded-port': '443' })), 'https://portal.test')
+    assert.equal(originFromForwarded(new Headers({})), undefined)
+  })
+  it('siteOriginOf applies one rule to a request or bare headers', () => {
+    const h = { 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https' }
+    assert.equal(siteOriginOf(new Headers(h), 'https://main.test'), 'https://portal.test')
+    assert.equal(siteOriginOf(new Request('http://x/mcp', { headers: h }), 'https://main.test'), 'https://portal.test')
+    assert.equal(siteOriginOf(new Headers(), 'https://main.test'), 'https://main.test')
+    assert.equal(siteOriginOf(undefined, 'https://main.test'), 'https://main.test')
+  })
+  it('rejects a malformed host or scheme instead of building a bad origin', () => {
+    assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'evil.test/../x', 'x-forwarded-proto': 'https' })), undefined)
+    assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'evil.test\\@ok.test', 'x-forwarded-proto': 'https' })), undefined)
+    assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'javascript' })), undefined)
+    assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'portal.test:notaport', 'x-forwarded-proto': 'https' })), undefined)
+    // still valid: uppercase and a normal port are accepted
+    assert.equal(originFromForwarded(new Headers({ 'x-forwarded-host': 'Portal.Test:8080', 'x-forwarded-proto': 'https' })), 'https://Portal.Test:8080')
+  })
+  it('does not throw building a context from malformed forwarded headers, and forwards no identity for them', () => {
+    // originFromForwarded rejects the header, so requestContext falls back to config.mainSiteUrl
+    // instead of building a request against an attacker-controlled host or throwing
+    const ctx = ctxOf({ 'x-forwarded-host': 'evil.test/../x', 'x-forwarded-proto': 'https' })
+    assert.equal(typeof ctx.fetch, 'function')
+    assert.equal(ctx.headers, undefined)
+  })
+  it('forwards the cookie, authorization and API key, hashes the cookie into an identity, and nothing else', () => {
+    const ctx = ctxOf({ cookie: 'id_token=abc', 'x-api-key': 'k', authorization: 'Bearer nope', 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https', 'x-other': 'o' })
+    assert.deepEqual(ctx.headers, { cookie: 'id_token=abc', authorization: 'Bearer nope', 'x-apikey': 'k' })
+    assert.equal(ctx.identity, createHash('sha256').update('id_token=abc').digest('hex'))
+    assert.equal(typeof ctx.fetch, 'function')
+  })
+  it('has no headers and no identity for an anonymous caller, and keeps the main site without forwarded headers', () => {
+    const ctx = ctxOf({})
+    assert.equal(ctx.headers, undefined)
+    assert.equal(ctx.identity, undefined)
+  })
+  it('forwards a bearer authorization', () => {
+    assert.equal(ctxOf({ authorization: 'Bearer t' }).headers?.authorization, 'Bearer t')
+  })
+  it('identifies a bearer-only caller, apart from an API-key caller', () => {
+    const bearer = ctxOf({ authorization: 'Bearer t' }).identity
+    assert.ok(bearer)
+    assert.notEqual(bearer, ctxOf({ 'x-apikey': 't' }).identity)
+  })
+  it('accepts x-apiKey in either spelling', () => {
+    assert.equal(ctxOf({ 'x-apikey': 'k2' }).headers!['x-apikey'], 'k2')
+  })
+})
