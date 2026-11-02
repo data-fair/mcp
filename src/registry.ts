@@ -26,12 +26,6 @@ interface Content { dataUpdatedAt: string, promise: Promise<Skill | undefined> }
 const messageOf = (err: unknown) => err instanceof Error ? err.message : String(err)
 const time = (iso: string) => new Date(iso).getTime()
 
-const withTimeout = <T>(promise: Promise<T>, ms: number, what: string): Promise<T> => {
-  let timer: NodeJS.Timeout
-  const timeout = new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error(`${what} timed out after ${ms}ms`)), ms) })
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
-}
-
 export function createRegistrySkills (options: RegistrySkillsOptions): RegistrySkills {
   const timeoutMs = options.timeoutMs ?? 5000
   const baseUrl = options.url.replace(/\/+$/, '')
@@ -83,9 +77,11 @@ export function createRegistrySkills (options: RegistrySkillsOptions): RegistryS
 
   const download = async (id: string) => {
     // the package is public to whoever listed it, so the download carries no account
-    const { path } = await withTimeout(ensureArtefact({
+    // no timeout here: ensureArtefact cannot be aborted, so the id's slot stays held until it settles,
+    // and callers are bounded by their own wait
+    const { path } = await ensureArtefact({
       registryUrl: baseUrl, secretKey: options.secretKey, artefactId: id, cacheDir: options.cacheDir
-    }), timeoutMs * 6, `registry download of ${id}`)
+    })
     return path
   }
 

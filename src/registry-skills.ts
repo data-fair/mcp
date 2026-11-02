@@ -89,7 +89,9 @@ export const parseSkillPackage = async (dir: string): Promise<{ skill: Skill, wa
 
   const texts = new Map<string, string>()
   for (const { path } of accepted) {
-    try { texts.set(path, utf8.decode(await readFile(join(dir, path)))) } catch { return { error: `${path} is not valid UTF-8 text` } }
+    // a read failure throws (the extraction is unreliable, not the package invalid); only a bad decode is a verdict
+    const content = await readFile(join(dir, path))
+    try { texts.set(path, utf8.decode(content)) } catch { return { error: `${path} is not valid UTF-8 text` } }
   }
 
   const parsed = splitFrontmatter(texts.get('SKILL.md')!)

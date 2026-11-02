@@ -97,9 +97,9 @@ describe('registry skills', () => {
     await skills.skillsFor(A)
     assert.equal(registry.hits.download, 2)
     await registry.publish('pub', { 'SKILL.md': skillMd('pub-skill', 'Body v2') }, { public: true })
-    const [forA, forB] = await Promise.all([skills.skillsFor(B), skills.skillsFor(A)])
-    assert.deepEqual(names(forA), ['pub-skill'])
-    assert.deepEqual(names(forB), ['priv-skill', 'pub-skill'])
+    const [forB, forA] = await Promise.all([skills.skillsFor(B), skills.skillsFor(A)])
+    assert.deepEqual(names(forB), ['pub-skill'])
+    assert.deepEqual(names(forA), ['priv-skill', 'pub-skill'])
     assert.deepEqual(skills.status().invalid, [])
     assert.equal(registry.hits.download, 3)
   })
@@ -120,6 +120,19 @@ describe('registry skills', () => {
     assert.ok(Date.now() - start < 700)
     release()
     for (let i = 0; i < 20 && (await skills.skillsFor(A)).length < 2; i++) await new Promise(resolve => setTimeout(resolve, 50))
+    assert.deepEqual(names(await skills.skillsFor(A)), ['priv-skill', 'pub-skill'])
+  })
+
+  it('a stalled download keeps its slot: no second download of the same artefact meanwhile', async () => {
+    const skills = await create({ timeoutMs: 100, listingTtl: 0 })
+    const release = registry.holdDownloads('priv')
+    await skills.skillsFor(A)
+    await new Promise(resolve => setTimeout(resolve, 700)) // well past the former 6 x timeoutMs bound
+    await skills.skillsFor(A)
+    assert.equal(registry.hits.download, 2) // pub and priv, once each
+    release()
+    for (let i = 0; i < 20 && (await skills.skillsFor(A)).length < 2; i++) await new Promise(resolve => setTimeout(resolve, 50))
+    assert.equal(registry.hits.download, 2)
     assert.deepEqual(names(await skills.skillsFor(A)), ['priv-skill', 'pub-skill'])
   })
 

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdir, symlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseSkillPackage, SKILL_LIMITS } from './registry-skills.ts'
 import { writeSkillPackage } from '../test/skill-packages.ts'
@@ -76,5 +76,12 @@ describe('registry skill package parser', () => {
     assert.deepEqual(res.skill.resources?.map(r => r.path), ['ok.md'])
     assert.ok(res.warnings.some(w => w.includes('link.txt')))
     assert.ok(res.warnings.some(w => w.includes('dirlink')))
+  })
+
+  it('throws on an unreadable file instead of calling the package invalid', async (t) => {
+    if (process.getuid?.() === 0) return t.skip('root reads everything')
+    const dir = await writeSkillPackage({ 'SKILL.md': skillMd(), 'a.json': '{}' })
+    await chmod(join(dir, 'a.json'), 0)
+    await assert.rejects(parseSkillPackage(dir), /EACCES/)
   })
 })
