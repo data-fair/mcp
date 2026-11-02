@@ -45,6 +45,9 @@ Two usage modes:
 - `src/scopes.ts` — request → verified scopes (lib-express session) or a 401 challenge; the MCP
   audience; stdio's `my-session`
 - `src/oauth-discovery.ts` — the site's SD issuer (probed, cached) and the RFC 9728 metadata
+- `src/registry.ts` — the registry's skills per account (listing cache, packages via lib-node-registry,
+  never throws), `src/registry-skills.ts` — a skill package parsed into a `Skill` with its files
+- `src/compose-skills.ts` — API-doc skills plus the registry's, cut to the caller's granted tools
 - `src/editor-schema.ts` — form-schema preparation for the editor tools
 - `src/ai-catalog.ts` — the `/ai-catalog.json` document
 - `src/site-fetch.ts` — origin swap, dispatcher (DNS cache, optional in-cluster proxy hop)
@@ -66,6 +69,9 @@ Two usage modes:
   decides when a request also has a cookie
 - OAuth discovery only on issuer sites (SD serves a complete authorization server discovery
   there) without a path prefix: elsewhere the 401 challenge has no `resource_metadata`
+- Registry skills (`config.registry`) are added per request on `/mcp` only, by the verified session's
+  active account (`x-mcp-account`, stripped like the scopes header); API-key callers see public ones;
+  a registry failure never fails a request (last good listing, else none; `/status`)
 - The datasets server is a fixed map of platform tools to the historic names, not a scope
   selection (`src/datasets-server.ts`); on that route an unverifiable credential is dropped and
   the caller served anonymously

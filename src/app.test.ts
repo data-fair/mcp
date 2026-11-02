@@ -1,14 +1,97 @@
 import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { startFakeSite, type FakeSite } from '../test/fake-site.ts'
 import { bearerFor, cookieFor, nhiClaims, userClaims, USER } from '../test/tokens.ts'
 import config from '#config'
+import { createFakeRegistry } from '../test/fake-registry.ts'
 import type { Runtime } from './server.ts'
 
 const PROXY = { 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https', 'x-forwarded-for': '203.0.113.7' }
 const DATASETS_NAMES = ['list_datasets', 'describe_dataset', 'search_data', 'get_field_values', 'aggregate_data', 'calculate_metric', 'geocode_address']
+
+describe('app registry skills', () => {
+  let site: FakeSite, registry: Awaited<ReturnType<typeof createFakeRegistry>>, http: Server, base: string, runtime: Runtime, cacheDir: string
+  const listen = async (handler: (req: IncomingMessage, res: ServerResponse) => void) => {
+    const server = createServer(handler)
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    return { server, origin: `http://127.0.0.1:${(server.address() as any).port}` }
+  }
+  const rawPost = async (path: string, headers: Record<string, string>, body: object) => {
+    const res = await fetch(base + path, { method: 'POST', headers: { ...PROXY, 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...headers }, body: JSON.stringify(body) })
+    const text = await res.text()
+    return JSON.parse(text.startsWith('event:') || text.startsWith('data:') ? text.split('\n').find(l => l.startsWith('data:'))!.slice(5) : text)
+  }
+  const skills = async (path: string, headers: Record<string, string>) => (await rpc(path, headers, 'skills/list')).result
+  const rpc = (path: string, headers: Record<string, string>, method: string, params: object = {}) =>
+    rawPost(path, headers, { jsonrpc: '2.0', id: 1, method, params })
+
+  before(async () => {
+    site = await startFakeSite()
+    registry = await createFakeRegistry()
+    await registry.publish('pub-skill', { 'SKILL.md': '---\nname: pub-skill\ndescription: Public one\n---\nPublic body' }, { public: true })
+    await registry.publish('priv-skill', { 'SKILL.md': '---\nname: priv-skill\ndescription: Private one\n---\nPrivate body', 'notes.md': '# notes' }, { privateAccess: [{ type: 'user', id: 'user1' }] })
+    cacheDir = await mkdtemp(join(tmpdir(), 'app-skills-'))
+    Object.assign(config, {
+      mainSiteUrl: site.origin,
+      portalUrl: undefined,
+      privateDirectoryUrl: site.origin + '/simple-directory',
+      refreshInterval: 0,
+      trustedForwarder: 'secret',
+      upstreamProxyHost: `127.0.0.1:${site.port}`,
+      registry: { url: registry.url, secretKey: registry.secretKey, listingTtl: 0, cacheDir }
+    })
+    const { createRuntime } = await import('./server.ts')
+    runtime = await createRuntime(config);
+    ({ server: http, origin: base } = await listen(runtime.app))
+  })
+  after(async () => { runtime.platform.close(); http.close(); await registry.close(); await site.close(); await rm(cacheDir, { recursive: true, force: true }); Object.assign(config, { registry: { listingTtl: 60, cacheDir: '/tmp/skills' } }) })
+
+  it('lists the private skill with its file to the active account, and reads the file', async () => {
+    const headers = { ...PROXY, cookie: cookieFor(USER) }
+    const { skills: list } = await skills('/mcp-server/mcp', headers)
+    const priv = list.find((s: any) => s.frontmatter.name === 'priv-skill')
+    assert.ok(priv, JSON.stringify(list.map((s: any) => s.frontmatter.name)))
+    assert.ok(list.some((s: any) => s.frontmatter.name === 'pub-skill'))
+    assert.ok(list.length > 2, 'API-doc skills come with them')
+    assert.match(JSON.stringify(priv), /skill:\/\/priv-skill\/notes\.md/)
+    const client = new Client({ name: 'c', version: '0' }, { versionNegotiation: { mode: 'auto' } })
+    await client.connect(new StreamableHTTPClientTransport(new URL(base + '/mcp-server/mcp'), { requestInit: { headers } }))
+    try {
+      const read = await client.readResource({ uri: 'skill://priv-skill/notes.md' })
+      assert.equal((read.contents[0] as any).text, '# notes')
+    } finally { await client.close() }
+  })
+  it('shows an API-key caller the public skills only', async () => {
+    const { skills: list } = await skills('/mcp-server/mcp', { ...PROXY, 'x-apikey': 'key' })
+    const found = list.map((s: any) => s.frontmatter.name)
+    assert.ok(found.includes('pub-skill'))
+    assert.ok(!found.includes('priv-skill'))
+  })
+  it('serves no registry skill on the datasets server', async () => {
+    const { skills: list } = await skills('/mcp-server/datasets/mcp', { ...PROXY, cookie: cookieFor(USER) })
+    const found = list.map((s: any) => s.frontmatter.name)
+    assert.ok(!found.includes('pub-skill') && !found.includes('priv-skill'))
+  })
+  it('reports the registry in /status', async () => {
+    const status: any = await (await fetch(`${base}/status`)).json()
+    assert.deepEqual(status.registry.invalid, [])
+  })
+  it('still answers /mcp with the API-doc skills when the registry is down', async () => {
+    await registry.close()
+    const { skills: list } = await skills('/mcp-server/mcp', { ...PROXY, cookie: cookieFor(USER) })
+    assert.ok(list.some((s: any) => s.frontmatter.name === 'datafair-workflow'))
+    // an unknown caller has no last good listing: the API-doc skills alone
+    const other = await skills('/mcp-server/mcp', { ...PROXY, 'x-apikey': 'key' })
+    assert.ok(!other.skills.some((s: any) => s.frontmatter.name === 'priv-skill'))
+    const status: any = await (await fetch(`${base}/status`)).json()
+    assert.ok(status.registry.error)
+  })
+})
 
 describe('app', () => {
   let site: FakeSite, store: Server, storeOrigin: string, http: Server, base: string, runtime: Runtime

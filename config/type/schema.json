@@ -91,6 +91,16 @@
         }
       }
     },
+    "registry": {
+      "type": "object",
+      "description": "The skills registry: its published skills are served on the platform server, to the callers its visibility rules allow. Without a url, none.",
+      "properties": {
+        "url": { "type": "string", "description": "Origin of the registry service (in-cluster URL).", "example": "http://registry:8080" },
+        "secretKey": { "type": "string", "description": "The registry's internal secret, sent with the caller's active account to list the skills visible to it." },
+        "listingTtl": { "type": "number", "default": 60, "description": "Seconds a caller's listing is reused before the registry is asked again." },
+        "cacheDir": { "type": "string", "default": "/tmp/skills", "description": "Directory where skill packages are extracted." }
+      }
+    },
     "files": {
       "type": "object",
       "description": "File inputs (indirect uploads, see @data-fair/openapi-mcp docs/x-agent.md#files). Without a URL prefix, tools that need a file are not offered.",
