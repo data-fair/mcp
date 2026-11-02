@@ -127,28 +127,28 @@ examples/…
   - a new artefact starts hidden;
   - a superadmin exposes it with `public` or `privateAccess`.
 
-### 3. openapi-mcp: skills with files
+### 3. openapi-mcp: plumbing only
 
-Extend `Skill` with optional files:
+openapi-mcp stays a set of pure transformations of an OpenAPI document; it does not learn about
+registries, packages or reading files (decided on 2026-11-02). This server already composes the
+`ToolSet` it hands to the adapter (it appends `geocode_address` the same way), so it can append
+registry `Skill` objects itself. The one gap is that a skill cannot carry attached files, and the
+adapter's handlers serve only `SKILL.md`. The change is limited to that:
 
 ```ts
-interface SkillFileEntry { path: string, mimeType: string, text: string, digest: string, size: number }
-interface Skill { /* … */ files?: SkillFileEntry[] }
+// pure data, built by the caller; openapi-mcp never produces it from a document
+interface SkillResource { path: string, mimeType: string, text: string }
+interface Skill { /* … */ resources?: SkillResource[] }
 ```
 
 - **`skills/list` / `skills/get`.** The entry's `resources` lists `SKILL.md` first, then each
-  file as `skill://<name>/<path>`, each with its digest and size.
-- **`resources/read`.** Serves those file URIs too, with their MIME type.
-- **`resources/list`.** Keeps listing only the `SKILL.md` of each skill (my call), so the
-  listing isn't flooded.
-- **Shared parser.** Add a helper `skillFromFiles(files: {path, text}[]): Skill` that:
-  - parses `SKILL.md`'s frontmatter;
-  - applies the name and description rules;
-  - keeps the attached files.
-
-  It lives in openapi-mcp (my call) so a skill repo's lint can reuse the exact rules the server
-  applies.
-- **Unchanged.** `toolsForScopes` and API-doc skill loading do not change.
+  attached resource as `skill://<name>/<path>`, with the digest and size the adapter computes
+  as it already does for `SKILL.md`.
+- **`resources/read`.** Serves those URIs too, with their MIME type.
+- **`resources/list`.** Keeps listing only each skill's `SKILL.md` (my call), so the listing
+  isn't flooded.
+- **Unchanged.** `toolsForScopes` (it already carries a skill through untouched), API-doc skill
+  loading, and everything else in the library.
 
 ### 4. This server: per-account composition
 
@@ -188,7 +188,9 @@ registry: {
 3. **Content.**
    - Each listed artefact is fetched with `ensureArtefact` without `account`. The listing already
      did the gating.
-   - Its files are parsed with `skillFromFiles`.
+   - Its files are parsed by this server (`src/registry-skills.ts`, my call): `SKILL.md`'s
+     frontmatter, the name and description rules, the limits, the ignored entries. The result is
+     an openapi-mcp `Skill` with `resources`.
    - The parsed skill is cached in memory under `(id, dataUpdatedAt)`. The content cache is
      shared across accounts; only the listing is per account.
 4. **Composition.**
@@ -238,9 +240,10 @@ skills. It logs a warning when a caller's composed list exceeds 50.
 
 ## Testing
 
-- **openapi-mcp.** Unit tests for:
-  - `skillFromFiles` (frontmatter, rules, limits, ignored entries);
-  - the server handlers serving file resources, digests included.
+- **openapi-mcp.** Unit tests for the handlers serving a skill's attached resources (listing,
+  digests and sizes, reads, unknown paths).
+- **This server's parser.** Unit tests for frontmatter, name and description rules, limits and
+  ignored entries.
 - **This server.** A fake registry `http.Server`, next to `test/fake-site.ts`. Cases:
   - per-account listings, including no cross-account leak through the cache;
   - public-only for API keys;
