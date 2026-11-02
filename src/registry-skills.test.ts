@@ -57,6 +57,30 @@ describe('registry skill package parser', () => {
     assert.ok('skill' in res)
   })
 
+  it('ignores, with a warning, file names outside [A-Za-z0-9._-] and a nested SKILL.md', async () => {
+    const res = await parseSkillPackage(await writeSkillPackage({
+      'SKILL.md': skillMd(),
+      'ok/page-1_a.json': '{}',
+      'my page.json': '{}',
+      'dir é/a.json': '{}',
+      'docs/SKILL.md': 'nested'
+    }))
+    assert.ok('skill' in res)
+    assert.deepEqual(res.skill.resources!.map(r => r.path), ['ok/page-1_a.json'])
+    assert.ok(res.warnings.some(w => w.startsWith('my page.json:')), JSON.stringify(res.warnings))
+    assert.ok(res.warnings.some(w => w.startsWith('dir é/a.json:')), JSON.stringify(res.warnings))
+    assert.ok(res.warnings.some(w => w.startsWith('docs/SKILL.md:')), JSON.stringify(res.warnings))
+  })
+
+  it('warns when metadata.tools is not a string', async () => {
+    const res = await parseSkillPackage(await writeSkillPackage({
+      'SKILL.md': '---\nname: listy\ndescription: d\nmetadata:\n  tools: [datafair_a, datafair_b]\n---\nBody\n'
+    }))
+    assert.ok('skill' in res)
+    assert.equal(res.skill.tools, undefined)
+    assert.ok(res.warnings.some(w => /metadata\.tools/.test(w)), JSON.stringify(res.warnings))
+  })
+
   it('ignores an oversized unsupported file with a warning instead of failing', async () => {
     const res = await parseSkillPackage(await writeSkillPackage({ 'SKILL.md': skillMd(), 'logo.png': 'x'.repeat(300 * 1024) }))
     assert.ok('skill' in res)

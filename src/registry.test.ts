@@ -1,4 +1,4 @@
-import { describe, it, before, after, beforeEach } from 'node:test'
+import { describe, it, before, after, beforeEach, afterEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -8,7 +8,16 @@ import { createRegistrySkills } from './registry.ts'
 import type { CallerAccount } from './scopes.ts'
 
 const skillMd = (name: string, body = 'Body') => `---\nname: ${name}\ndescription: ${name} skill\n---\n${body}\n`
-const names = (skills: { name: string }[]) => skills.map(s => s.name).sort()
+const names = (skills: { skill: { name: string } }[]) => skills.map(s => s.skill.name).sort()
+
+/** polls a condition: a refresh in the background settles after the request that started it */
+const until = async (condition: () => unknown | Promise<unknown>, timeout = 3000) => {
+  const start = Date.now()
+  while (!(await condition())) {
+    if (Date.now() - start > timeout) throw new Error('condition not met in time')
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+}
 
 const A: CallerAccount = { type: 'organization', id: 'a' }
 const B: CallerAccount = { type: 'user', id: 'b' }
@@ -17,7 +26,10 @@ describe('registry skills', () => {
   let registry: Awaited<ReturnType<typeof createFakeRegistry>>
   before(async () => { registry = await createFakeRegistry() })
   after(() => registry.close())
+  let warn: ReturnType<typeof mock.method>
+  afterEach(() => mock.restoreAll())
   beforeEach(async () => {
+    warn = mock.method(console, 'warn', () => {})
     registry.fail(undefined)
     registry.hits.listing = 0
     registry.hits.download = 0
@@ -53,9 +65,9 @@ describe('registry skills', () => {
 
   it('republished skill served after the listing expires', async () => {
     const skills = await create({ listingTtl: 0 })
-    assert.equal((await skills.skillsFor(undefined))[0].body, 'Body\n')
+    assert.equal((await skills.skillsFor(undefined))[0].skill.body, 'Body\n')
     await registry.publish('pub', { 'SKILL.md': skillMd('pub-skill', 'Body v2') }, { public: true })
-    assert.equal((await skills.skillsFor(undefined))[0].body, 'Body v2\n')
+    await until(async () => (await skills.skillsFor(undefined))[0].skill.body === 'Body v2\n')
   })
 
   it('registry down', async () => {
@@ -64,6 +76,7 @@ describe('registry skills', () => {
     assert.equal(skills.status().error, undefined)
     registry.fail(500)
     assert.deepEqual(await skills.skillsFor(A).then(names), ['priv-skill', 'pub-skill'])
+    await until(() => skills.status().error)
     assert.match(skills.status().error!, /500/)
     // no prior listing for this account: nothing, never the other account's skills
     assert.deepEqual(await skills.skillsFor(B), [])
@@ -71,7 +84,7 @@ describe('registry skills', () => {
     await skills.skillsFor(A)
     assert.match(skills.status().error!, /500/) // B's listing is still failing
     await skills.skillsFor(B)
-    assert.equal(skills.status().error, undefined)
+    await until(() => skills.status().error === undefined)
   })
 
   it('registry hanging', async () => {
@@ -100,6 +113,7 @@ describe('registry skills', () => {
     const [forB, forA] = await Promise.all([skills.skillsFor(B), skills.skillsFor(A)])
     assert.deepEqual(names(forB), ['pub-skill'])
     assert.deepEqual(names(forA), ['priv-skill', 'pub-skill'])
+    await until(async () => (await skills.skillsFor(B))[0].skill.body === 'Body v2\n')
     assert.deepEqual(skills.status().invalid, [])
     assert.equal(registry.hits.download, 3)
   })
@@ -108,7 +122,8 @@ describe('registry skills', () => {
     const skills = await create({ listingTtl: 0 })
     await skills.skillsFor(A)
     await skills.skillsFor(A)
-    assert.equal(registry.hits.listing, 2)
+    await until(() => registry.hits.listing === 2)
+    await skills.skillsFor(A)
     assert.equal(registry.hits.download, 2)
   })
 
@@ -141,8 +156,73 @@ describe('registry skills', () => {
     await skills.skillsFor(A)
     registry.fail(500)
     await skills.skillsFor(A)
+    await until(() => skills.status().error)
     registry.fail(undefined)
     await skills.skillsFor(undefined)
     assert.match(skills.status().error!, /500/)
+  })
+
+  it('an expired listing during a hanging registry is served from cache at once', async () => {
+    const skills = await create({ timeoutMs: 2000, listingTtl: 0 })
+    assert.deepEqual(names(await skills.skillsFor(A)), ['priv-skill', 'pub-skill'])
+    registry.fail('hang')
+    const start = Date.now()
+    assert.deepEqual(names(await skills.skillsFor(A)), ['priv-skill', 'pub-skill'])
+    assert.ok(Date.now() - start < 300, `took ${Date.now() - start}ms`)
+    await until(() => registry.hits.listing === 2) // the background refresh reached the registry, not the next test's
+  })
+
+  it('after a listing failure the listing is not asked again within listingTtl', async () => {
+    const skills = await create({ listingTtl: 60 })
+    registry.fail(500)
+    assert.deepEqual(await skills.skillsFor(A), [])
+    registry.fail(undefined)
+    assert.deepEqual(await skills.skillsFor(A), [])
+    assert.equal(registry.hits.listing, 1)
+    assert.match(skills.status().error!, /500/)
+  })
+
+  it('during a slow republish the previous version is served', async () => {
+    const skills = await create({ timeoutMs: 2000, listingTtl: 0 })
+    assert.equal((await skills.skillsFor(undefined))[0].skill.body, 'Body\n')
+    await registry.publish('pub', { 'SKILL.md': skillMd('pub-skill', 'Body v2') }, { public: true })
+    const release = registry.holdDownloads('pub')
+    try {
+      // the expired listing refreshes in the background, then a request starts the new version's download
+      await until(async () => { await skills.skillsFor(undefined); return registry.hits.download === 2 })
+      const start = Date.now()
+      assert.equal((await skills.skillsFor(undefined))[0]?.skill.body, 'Body\n')
+      assert.ok(Date.now() - start < 500, `took ${Date.now() - start}ms`)
+    } finally {
+      release()
+    }
+    await until(async () => (await skills.skillsFor(undefined))[0].skill.body === 'Body v2\n')
+  })
+
+  it('a listing without dataUpdatedAt downloads its artefact once', async () => {
+    registry.undate('pub')
+    const skills = await create({ listingTtl: 0 })
+    await until(async () => { await skills.skillsFor(undefined); return registry.hits.listing >= 4 })
+    assert.deepEqual(names(await skills.skillsFor(undefined)), ['pub-skill'])
+    assert.equal(registry.hits.download, 1)
+  })
+
+  it('logs a listing failure, an invalid package and a truncated listing once each', async () => {
+    await registry.publish('broken', { 'SKILL.md': 'no front matter' }, { public: true })
+    registry.reportCount(150)
+    try {
+      const skills = await create({ listingTtl: 0 })
+      await until(async () => { await skills.skillsFor(undefined); return registry.hits.listing >= 3 })
+      registry.fail(500)
+      await skills.skillsFor(B)
+      await skills.skillsFor(B)
+      const logged = warn.mock.calls.map(c => String(c.arguments[0]))
+      assert.equal(logged.filter(m => /broken/.test(m) && /frontmatter/.test(m)).length, 1, JSON.stringify(logged))
+      assert.equal(logged.filter(m => /150/.test(m)).length, 1, JSON.stringify(logged))
+      assert.equal(logged.filter(m => /listing for user:b failed/.test(m)).length, 1, JSON.stringify(logged))
+    } finally {
+      registry.reportCount(undefined)
+      registry.unpublish('broken')
+    }
   })
 })

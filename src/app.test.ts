@@ -81,15 +81,21 @@ describe('app registry skills', () => {
     const status: any = await (await fetch(`${base}/status`)).json()
     assert.deepEqual(status.registry.invalid, [])
   })
-  it('still answers /mcp with the API-doc skills when the registry is down', async () => {
+  it('still answers /mcp with the API-doc skills when the registry is down', async (t) => {
+    t.mock.method(console, 'warn', () => {}) // the listing failures are logged
     await registry.close()
     const { skills: list } = await skills('/mcp-server/mcp', { ...PROXY, cookie: cookieFor(USER) })
     assert.ok(list.some((s: any) => s.frontmatter.name === 'datafair-workflow'))
     // an unknown caller has no last good listing: the API-doc skills alone
     const other = await skills('/mcp-server/mcp', { ...PROXY, 'x-apikey': 'key' })
     assert.ok(!other.skills.some((s: any) => s.frontmatter.name === 'priv-skill'))
-    const status: any = await (await fetch(`${base}/status`)).json()
-    assert.ok(status.registry.error)
+    // a cached listing is refreshed in the background: the failure shows in /status once it settles
+    for (let i = 0; i < 50; i++) {
+      const status: any = await (await fetch(`${base}/status`)).json()
+      if (status.registry.error) return
+      await new Promise(resolve => setTimeout(resolve, 20))
+    }
+    assert.fail('/status reports no registry error')
   })
 })
 

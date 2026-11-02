@@ -26,8 +26,8 @@ module.exports = {
     }
   },
   registry: {
-    url: 'REGISTRY_URL',
-    secretKey: 'REGISTRY_SECRET',
+    url: 'PRIVATE_REGISTRY_URL',
+    secretKey: 'SECRET_REGISTRY',
     listingTtl: { __name: 'REGISTRY_LISTING_TTL', __format: 'json' },
     cacheDir: 'REGISTRY_CACHE_DIR'
   },

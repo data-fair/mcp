@@ -69,9 +69,12 @@ Two usage modes:
   decides when a request also has a cookie
 - OAuth discovery only on issuer sites (SD serves a complete authorization server discovery
   there) without a path prefix: elsewhere the 401 challenge has no `resource_metadata`
-- Registry skills (`config.registry`) are added per request on `/mcp` only, by the verified session's
+- Registry skills (`config.registry`: `PRIVATE_REGISTRY_URL`, `SECRET_REGISTRY`, `REGISTRY_LISTING_TTL`,
+  `REGISTRY_CACHE_DIR`) are added per request on `/mcp` only, by the verified session's
   active account (`x-mcp-account`, stripped like the scopes header); API-key callers see public ones;
-  a registry failure never fails a request (last good listing, else none; `/status`)
+  a registry failure never fails a request (last good listing, else none; `/status`) nor slows it
+  (an expired listing or a newer version loads in the background; only a first load is waited for);
+  between registry skills of one name, the artefact id sorting last wins
 - The datasets server is a fixed map of platform tools to the historic names, not a scope
   selection (`src/datasets-server.ts`); on that route an unverifiable credential is dropped and
   the caller served anonymously

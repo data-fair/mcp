@@ -37,11 +37,17 @@ export const createFakeRegistry = async () => {
   let clock = Date.parse('2026-01-01T00:00:00Z')
   const held = new Map<string, (() => void)[]>()
   const hits = { listing: 0, download: 0 }
+  const undated = new Set<string>()
+  let reportedCount: number | undefined
 
   const server = createServer((req, res) => {
+    const url = new URL(req.url!, 'http://localhost')
+    const match = url.pathname.match(/^\/api\/v1\/artefacts\/([^/]+)\/download$/)
+    // every request counts, failed ones too
+    if (url.pathname === '/api/v1/artefacts') hits.listing++
+    else if (match) hits.download++
     if (failure === 'hang') return
     if (failure) { res.writeHead(failure).end('{}'); return }
-    const url = new URL(req.url!, 'http://localhost')
     const secret = req.headers['x-secret-key'] === secretKey
     let account: CallerAccount | undefined
     try { if (secret && req.headers['x-account']) account = JSON.parse(String(req.headers['x-account'])) } catch { /* ignore */ }
@@ -52,14 +58,12 @@ export const createFakeRegistry = async () => {
     }
 
     if (url.pathname === '/api/v1/artefacts') {
-      hits.listing++
-      const results = [...artefacts.values()].filter(a => isVisible(a)).map(a => ({ _id: a.id, category: 'skill', dataUpdatedAt: a.dataUpdatedAt.toISOString() }))
-      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ results, count: results.length }))
+      const results = [...artefacts.values()].filter(a => isVisible(a))
+        .map(a => ({ _id: a.id, category: 'skill', ...(!undated.has(a.id) && { dataUpdatedAt: a.dataUpdatedAt.toISOString() }) }))
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ results, count: reportedCount ?? results.length }))
       return
     }
-    const match = url.pathname.match(/^\/api\/v1\/artefacts\/([^/]+)\/download$/)
     if (match) {
-      hits.download++
       const artefact = artefacts.get(decodeURIComponent(match[1]))
       if (!secret) { res.writeHead(401).end(); return }
       if (!artefact) { res.writeHead(404).end(); return }
@@ -89,6 +93,7 @@ export const createFakeRegistry = async () => {
     /** publishing again under the same id is a new version with a later dataUpdatedAt */
     async publish (id: string, files: Record<string, string>, visibility: Visibility) {
       clock += 10_000
+      undated.delete(id)
       artefacts.set(id, { id, files, visibility, dataUpdatedAt: new Date(clock), tarball: await buildTarball(files) })
     },
     /** answers to this artefact's downloads wait for the returned release function */
@@ -97,7 +102,11 @@ export const createFakeRegistry = async () => {
       held.set(id, pending)
       return () => { held.delete(id); pending.forEach(respond => respond()) }
     },
-    unpublish (id: string) { artefacts.delete(id) },
+    unpublish (id: string) { artefacts.delete(id); undated.delete(id) },
+    /** the listing leaves out this artefact's dataUpdatedAt */
+    undate (id: string) { undated.add(id) },
+    /** the listing's count, as if more artefacts matched than one page holds; undefined: the real count */
+    reportCount (count: number | undefined) { reportedCount = count },
     fail (status: number | 'hang' | undefined) { failure = status },
     async close () {
       server.closeAllConnections()

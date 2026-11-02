@@ -29,6 +29,9 @@ const extensionOf = (path: string) => {
 
 const isSafePath = (path: string) => !path.startsWith('/') && !path.split('/').some(s => s === '..' || s === '')
 
+// a served file name stays a plain, portable uri segment
+const SEGMENT_PATTERN = /^[A-Za-z0-9._-]+$/
+
 type Entry = { path: string, size: number }
 
 /** Walks dir without following symlinks; returns the candidate files and what was skipped. */
@@ -72,6 +75,14 @@ export const parseSkillPackage = async (dir: string): Promise<{ skill: Skill, wa
   for (const entry of entries) {
     if (entry.path === 'package.json') continue
     if (!isSafePath(entry.path)) return { error: `unsafe path ${entry.path}` }
+    if (!entry.path.split('/').every(segment => SEGMENT_PATTERN.test(segment))) {
+      warnings.push(`${entry.path}: file name outside [A-Za-z0-9._-] ignored`)
+      continue
+    }
+    if (entry.path !== 'SKILL.md' && entry.path.endsWith('/SKILL.md')) {
+      warnings.push(`${entry.path}: nested SKILL.md ignored`)
+      continue
+    }
     if (entry.path !== 'SKILL.md' && !MIME_TYPES[extensionOf(entry.path)]) {
       warnings.push(`${entry.path}: unsupported file type ignored`)
       continue
@@ -108,6 +119,7 @@ export const parseSkillPackage = async (dir: string): Promise<{ skill: Skill, wa
   }
   const tools = metadata?.tools
   if (typeof tools === 'string' && tools.trim()) skill.tools = tools.trim().split(/\s+/)
+  else if (tools !== undefined && typeof tools !== 'string') warnings.push('metadata.tools ignored: not a space-separated string')
   skill.resources = accepted
     .filter(e => e.path !== 'SKILL.md')
     .map((e): SkillResource => ({ path: e.path, mimeType: MIME_TYPES[extensionOf(e.path)], text: texts.get(e.path)! }))
