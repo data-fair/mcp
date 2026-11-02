@@ -35,25 +35,33 @@ describe('registry skill package parser', () => {
   })
 
   it('rejects invalid packages', async () => {
-    const bad = async (files: Record<string, string | Buffer>) => {
+    const bad = async (reason: RegExp, files: Record<string, string | Buffer>) => {
       const res = await parseSkillPackage(await writeSkillPackage(files))
       assert.ok('error' in res, JSON.stringify(res))
+      assert.match(res.error, reason)
       return res.error
     }
-    await bad({ 'README.md': 'x' })
-    await bad({ 'SKILL.md': skillMd('Bad_Name') })
-    await bad({ 'SKILL.md': skillMd('a'.repeat(65)) })
-    await bad({ 'SKILL.md': skillMd('ok', 'd'.repeat(1025)) })
-    await bad({ 'SKILL.md': skillMd(), 'big.txt': 'x'.repeat(SKILL_LIMITS.fileSize + 1) })
-    await bad({ 'SKILL.md': skillMd(), ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`f${i}.txt`, 'x'.repeat(SKILL_LIMITS.fileSize)])) })
-    await bad({ 'SKILL.md': skillMd(), ...Object.fromEntries(Array.from({ length: 100 }, (_, i) => [`f${i}.txt`, 'x'])) })
-    await bad({ 'SKILL.md': skillMd(), 'bad.json': Buffer.from([0xff, 0xfe, 0x00]) })
-    await bad({ 'SKILL.md': '# no frontmatter' })
+    await bad(/SKILL.md not found/, { 'README.md': 'x' })
+    await bad(/invalid skill name/, { 'SKILL.md': skillMd('Bad_Name') })
+    await bad(/invalid skill name/, { 'SKILL.md': skillMd('a'.repeat(65)) })
+    await bad(/invalid skill description/, { 'SKILL.md': skillMd('ok', 'd'.repeat(1025)) })
+    await bad(/big.txt is larger/, { 'SKILL.md': skillMd(), 'big.txt': 'x'.repeat(SKILL_LIMITS.fileSize + 1) })
+    await bad(/package is larger/, { 'SKILL.md': skillMd(), ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`f${i}.txt`, 'x'.repeat(SKILL_LIMITS.fileSize)])) })
+    await bad(/too many files/, { 'SKILL.md': skillMd(), ...Object.fromEntries(Array.from({ length: 100 }, (_, i) => [`f${i}.txt`, 'x'])) })
+    await bad(/bad.json is not valid UTF-8/, { 'SKILL.md': skillMd(), 'bad.json': Buffer.from([0xff, 0xfe, 0x00]) })
+    await bad(/no valid frontmatter/, { 'SKILL.md': '# no frontmatter' })
   })
 
   it('accepts exactly the file limit and the per-file limit', async () => {
     const res = await parseSkillPackage(await writeSkillPackage({ 'SKILL.md': skillMd(), 'a.txt': 'x'.repeat(SKILL_LIMITS.fileSize) }))
     assert.ok('skill' in res)
+  })
+
+  it('ignores an oversized unsupported file with a warning instead of failing', async () => {
+    const res = await parseSkillPackage(await writeSkillPackage({ 'SKILL.md': skillMd(), 'logo.png': 'x'.repeat(300 * 1024) }))
+    assert.ok('skill' in res)
+    assert.deepEqual(res.skill.resources, [])
+    assert.ok(res.warnings.some(w => w.includes('logo.png')))
   })
 
   it('ignores a symlink pointing outside the package, with a warning', async () => {

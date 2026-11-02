@@ -66,22 +66,24 @@ export const parseSkillPackage = async (dir: string): Promise<{ skill: Skill, wa
   let entries: Entry[]
   try { entries = await walk(dir, warnings) } catch (err) { return { error: `cannot read package: ${(err as Error).message}` } }
 
-  // package.json is never served
-  entries = entries.filter(e => e.path !== 'package.json')
-  if (entries.length > SKILL_LIMITS.files) return { error: `too many files (${entries.length}, max ${SKILL_LIMITS.files})` }
+  // package.json is never served; unsupported types are ignored and count toward no limit
+  const accepted: Entry[] = []
   const paths = new Set<string>()
-  for (const { path, size } of entries) {
-    if (!isSafePath(path)) return { error: `unsafe path ${path}` }
-    if (paths.has(path)) return { error: `duplicate path ${path}` }
-    paths.add(path)
-    if (size > SKILL_LIMITS.fileSize) return { error: `${path} is larger than ${SKILL_LIMITS.fileSize} bytes` }
+  for (const entry of entries) {
+    if (entry.path === 'package.json') continue
+    if (!isSafePath(entry.path)) return { error: `unsafe path ${entry.path}` }
+    if (entry.path !== 'SKILL.md' && !MIME_TYPES[extensionOf(entry.path)]) {
+      warnings.push(`${entry.path}: unsupported file type ignored`)
+      continue
+    }
+    if (paths.has(entry.path)) return { error: `duplicate path ${entry.path}` }
+    paths.add(entry.path)
+    accepted.push(entry)
   }
   if (!paths.has('SKILL.md')) return { error: 'SKILL.md not found' }
-
-  const accepted: Entry[] = []
-  for (const entry of entries) {
-    if (entry.path === 'SKILL.md' || MIME_TYPES[extensionOf(entry.path)]) accepted.push(entry)
-    else warnings.push(`${entry.path}: unsupported file type ignored`)
+  if (accepted.length > SKILL_LIMITS.files) return { error: `too many files (${accepted.length}, max ${SKILL_LIMITS.files})` }
+  for (const { path, size } of accepted) {
+    if (size > SKILL_LIMITS.fileSize) return { error: `${path} is larger than ${SKILL_LIMITS.fileSize} bytes` }
   }
   if (accepted.reduce((sum, e) => sum + e.size, 0) > SKILL_LIMITS.total) return { error: `package is larger than ${SKILL_LIMITS.total} bytes` }
 
