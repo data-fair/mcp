@@ -69,6 +69,8 @@ describe('registry skills', () => {
     assert.deepEqual(await skills.skillsFor(B), [])
     registry.fail(undefined)
     await skills.skillsFor(A)
+    assert.match(skills.status().error!, /500/) // B's listing is still failing
+    await skills.skillsFor(B)
     assert.equal(skills.status().error, undefined)
   })
 
@@ -87,5 +89,47 @@ describe('registry skills', () => {
     assert.deepEqual(names(await skills.skillsFor(undefined)), ['pub-skill'])
     const { invalid } = skills.status()
     assert.deepEqual(invalid.map(i => i.id), ['broken'])
+    registry.unpublish('broken')
+  })
+
+  it('republish seen by two accounts at once: valid skills, one download per version', async () => {
+    const skills = await create()
+    await skills.skillsFor(A)
+    assert.equal(registry.hits.download, 2)
+    await registry.publish('pub', { 'SKILL.md': skillMd('pub-skill', 'Body v2') }, { public: true })
+    const [forA, forB] = await Promise.all([skills.skillsFor(B), skills.skillsFor(A)])
+    assert.deepEqual(names(forA), ['pub-skill'])
+    assert.deepEqual(names(forB), ['priv-skill', 'pub-skill'])
+    assert.deepEqual(skills.status().invalid, [])
+    assert.equal(registry.hits.download, 3)
+  })
+
+  it('content reused across expired listings', async () => {
+    const skills = await create({ listingTtl: 0 })
+    await skills.skillsFor(A)
+    await skills.skillsFor(A)
+    assert.equal(registry.hits.listing, 2)
+    assert.equal(registry.hits.download, 2)
+  })
+
+  it('a hanging download costs a request timeoutMs, then the skill appears once loaded', async () => {
+    const skills = await create({ timeoutMs: 200, listingTtl: 0 })
+    const release = registry.holdDownloads('priv')
+    const start = Date.now()
+    assert.deepEqual(names(await skills.skillsFor(A)), ['pub-skill'])
+    assert.ok(Date.now() - start < 700)
+    release()
+    for (let i = 0; i < 20 && (await skills.skillsFor(A)).length < 2; i++) await new Promise(resolve => setTimeout(resolve, 50))
+    assert.deepEqual(names(await skills.skillsFor(A)), ['priv-skill', 'pub-skill'])
+  })
+
+  it('one account recovering does not clear another listing failure', async () => {
+    const skills = await create({ listingTtl: 0 })
+    await skills.skillsFor(A)
+    registry.fail(500)
+    await skills.skillsFor(A)
+    registry.fail(undefined)
+    await skills.skillsFor(undefined)
+    assert.match(skills.status().error!, /500/)
   })
 })

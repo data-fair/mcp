@@ -35,6 +35,7 @@ export const createFakeRegistry = async () => {
   const artefacts = new Map<string, Published>()
   let failure: number | 'hang' | undefined
   let clock = Date.parse('2026-01-01T00:00:00Z')
+  const held = new Map<string, (() => void)[]>()
   const hits = { listing: 0, download: 0 }
 
   const server = createServer((req, res) => {
@@ -62,14 +63,18 @@ export const createFakeRegistry = async () => {
       const artefact = artefacts.get(decodeURIComponent(match[1]))
       if (!secret) { res.writeHead(401).end(); return }
       if (!artefact) { res.writeHead(404).end(); return }
-      const since = req.headers['if-modified-since']
-      if (since && Math.floor(Date.parse(since) / 1000) >= Math.floor(artefact.dataUpdatedAt.getTime() / 1000)) { res.writeHead(304).end(); return }
-      res.writeHead(200, {
-        'content-type': 'application/gzip',
-        'last-modified': artefact.dataUpdatedAt.toUTCString(),
-        'x-artefact-version': '1.0.0',
-        'content-length': artefact.tarball.length
-      }).end(artefact.tarball)
+      const respond = () => {
+        const since = req.headers['if-modified-since']
+        if (since && Math.floor(Date.parse(since) / 1000) >= Math.floor(artefact.dataUpdatedAt.getTime() / 1000)) { res.writeHead(304).end(); return }
+        res.writeHead(200, {
+          'content-type': 'application/gzip',
+          'last-modified': artefact.dataUpdatedAt.toUTCString(),
+          'x-artefact-version': '1.0.0',
+          'content-length': artefact.tarball.length
+        }).end(artefact.tarball)
+      }
+      const hold = held.get(artefact.id)
+      if (hold) hold.push(respond); else respond()
       return
     }
     res.writeHead(404).end()
@@ -86,6 +91,13 @@ export const createFakeRegistry = async () => {
       clock += 10_000
       artefacts.set(id, { id, files, visibility, dataUpdatedAt: new Date(clock), tarball: await buildTarball(files) })
     },
+    /** answers to this artefact's downloads wait for the returned release function */
+    holdDownloads (id: string) {
+      const pending: (() => void)[] = []
+      held.set(id, pending)
+      return () => { held.delete(id); pending.forEach(respond => respond()) }
+    },
+    unpublish (id: string) { artefacts.delete(id) },
     fail (status: number | 'hang' | undefined) { failure = status },
     async close () {
       server.closeAllConnections()

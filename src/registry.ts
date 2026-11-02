@@ -20,8 +20,11 @@ export interface RegistrySkills {
 
 interface ArtefactRef { id: string, dataUpdatedAt: string }
 interface Listing { at: number, artefacts: ArtefactRef[] }
+/** the one content entry kept per artefact; the promise never rejects */
+interface Content { dataUpdatedAt: string, promise: Promise<Skill | undefined> }
 
 const messageOf = (err: unknown) => err instanceof Error ? err.message : String(err)
+const time = (iso: string) => new Date(iso).getTime()
 
 const withTimeout = <T>(promise: Promise<T>, ms: number, what: string): Promise<T> => {
   let timer: NodeJS.Timeout
@@ -36,10 +39,14 @@ export function createRegistrySkills (options: RegistrySkillsOptions): RegistryS
   // keyed by `type:id` or `public`: the account decides visibility, never the credential
   const listings = new Map<string, Listing>()
   const listingsInFlight = new Map<string, Promise<ArtefactRef[]>>()
-  // keyed by `id@dataUpdatedAt`; content is the same for everyone who may list the artefact
-  const contents = new Map<string, Promise<Skill | undefined>>()
+  // one entry per artefact id: the content is the same for everyone who may list the artefact
+  const contents = new Map<string, Content>()
+  // ensureArtefact runs one at a time per artefact id (shared extraction dirs)
+  const slots = new Map<string, Promise<unknown>>()
   const invalid = new Map<string, string>()
-  let error: string | undefined
+  // latest failure per source (listing key, artefact id), the most recent last
+  const errors = new Map<string, string>()
+  const setError = (source: string, message: string) => { errors.delete(source); errors.set(source, message) }
 
   const fetchListing = async (account: CallerAccount | undefined): Promise<ArtefactRef[]> => {
     // anonymous must carry no secret: the secret alone bypasses the registry's visibility rules
@@ -61,7 +68,7 @@ export function createRegistrySkills (options: RegistrySkillsOptions): RegistryS
     if (!inFlight) {
       inFlight = fetchListing(account).then(artefacts => {
         listings.set(key, { at: Date.now(), artefacts })
-        error = undefined
+        errors.delete(`listing ${key}`)
         return artefacts
       }).finally(() => listingsInFlight.delete(key))
       listingsInFlight.set(key, inFlight)
@@ -69,18 +76,25 @@ export function createRegistrySkills (options: RegistrySkillsOptions): RegistryS
     try {
       return await inFlight
     } catch (err) {
-      error = `registry listing failed: ${messageOf(err)}`
+      setError(`listing ${key}`, `registry listing failed: ${messageOf(err)}`)
       return cached?.artefacts
     }
   }
 
-  const loadContent = async ({ id, dataUpdatedAt }: ArtefactRef): Promise<Skill | undefined> => {
+  const download = async (id: string) => {
     // the package is public to whoever listed it, so the download carries no account
     const { path } = await withTimeout(ensureArtefact({
       registryUrl: baseUrl, secretKey: options.secretKey, artefactId: id, cacheDir: options.cacheDir
     }), timeoutMs * 6, `registry download of ${id}`)
+    return path
+  }
+
+  const loadContent = async ({ id, dataUpdatedAt }: ArtefactRef): Promise<Skill | undefined> => {
+    const path = await download(id)
     const parsed = await parseSkillPackage(path)
     if ('error' in parsed) {
+      // an unreadable extraction is a download problem, not a verdict on the package
+      if (parsed.error.startsWith('cannot read package')) throw new Error(parsed.error)
       invalid.set(id, parsed.error)
       return undefined
     }
@@ -89,23 +103,32 @@ export function createRegistrySkills (options: RegistrySkillsOptions): RegistryS
     return parsed.skill
   }
 
-  const contentFor = async (ref: ArtefactRef): Promise<Skill | undefined> => {
-    const key = `${ref.id}@${ref.dataUpdatedAt}`
-    let content = contents.get(key)
-    if (!content) {
-      content = loadContent(ref)
-      contents.set(key, content)
-      // failures are not cached, successes (including invalid packages) are
-      content.catch(() => { if (contents.get(key) === content) contents.delete(key) })
-      // drop superseded versions of the same artefact
-      for (const other of contents.keys()) if (other !== key && other.startsWith(`${ref.id}@`)) contents.delete(other)
+  const startContent = (ref: ArtefactRef): Content => {
+    const previous = slots.get(ref.id) ?? Promise.resolve()
+    const run = previous.then(() => loadContent(ref))
+    // the slot is held until the run really settles, even after callers stopped waiting
+    slots.set(ref.id, run.catch(() => {}))
+    const content: Content = {
+      dataUpdatedAt: ref.dataUpdatedAt,
+      promise: run.then(skill => { errors.delete(`download ${ref.id}`); return skill }, err => {
+        // failures are not cached
+        if (contents.get(ref.id) === content) contents.delete(ref.id)
+        setError(`download ${ref.id}`, `registry download of ${ref.id} failed: ${messageOf(err)}`)
+        return undefined
+      })
     }
-    try {
-      return await content
-    } catch (err) {
-      error = `registry download of ${ref.id} failed: ${messageOf(err)}`
-      return undefined
-    }
+    contents.set(ref.id, content)
+    return content
+  }
+
+  const contentFor = (ref: ArtefactRef): Promise<Skill | undefined> => {
+    const existing = contents.get(ref.id)
+    // an older listed value never evicts newer content
+    const content = existing && time(existing.dataUpdatedAt) >= time(ref.dataUpdatedAt) ? existing : startContent(ref)
+    // a request waits for uncached content at most timeoutMs, the load goes on in the background
+    let timer: NodeJS.Timeout
+    const giveUp = new Promise<undefined>(resolve => { timer = setTimeout(resolve, timeoutMs, undefined) })
+    return Promise.race([content.promise, giveUp]).finally(() => clearTimeout(timer))
   }
 
   return {
@@ -116,6 +139,7 @@ export function createRegistrySkills (options: RegistrySkillsOptions): RegistryS
       return skills.filter((skill): skill is Skill => !!skill)
     },
     status () {
+      const error = [...errors.values()].at(-1)
       return { ...(error ? { error } : {}), invalid: [...invalid].map(([id, error]) => ({ id, error })) }
     }
   }
