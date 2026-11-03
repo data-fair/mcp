@@ -24,6 +24,8 @@ module.exports = {
       limits: { global: { nb: 40, duration: 1 }, perCaller: { nb: 10, duration: 1 } }
     }
   },
+  // the registry's skills, served on the platform server only; unset: none
+  registry: { url: undefined, secretKey: undefined, listingTtl: 60, cacheDir: '/tmp/skills' },
   files: {
     urlPrefixes: []
   }

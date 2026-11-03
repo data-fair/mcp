@@ -25,6 +25,12 @@ module.exports = {
       limits: { __name: 'EXTRA_TOOLS_GEOCODE_ADDRESS_LIMITS', __format: 'json' }
     }
   },
+  registry: {
+    url: 'PRIVATE_REGISTRY_URL',
+    secretKey: 'SECRET_REGISTRY',
+    listingTtl: { __name: 'REGISTRY_LISTING_TTL', __format: 'json' },
+    cacheDir: 'REGISTRY_CACHE_DIR'
+  },
   // FILE_URL_PREFIXES: a comma-separated list, split by normalizeLists in src/config.ts
   files: {
     urlPrefixes: 'FILE_URL_PREFIXES',

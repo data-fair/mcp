@@ -10,6 +10,10 @@ import { session, markScopeChecked, httpError } from '@data-fair/lib-express'
 import { siteFetch, type SiteDispatcher } from './site-fetch.ts'
 
 export const SCOPES_HEADER = 'x-mcp-scopes'
+/** The verified session's active account, internal like the scopes header (always deleted first). */
+export const ACCOUNT_HEADER = 'x-mcp-account'
+
+export interface CallerAccount { type: 'user' | 'organization', id: string }
 
 /** Where the server is mounted on a site: a bearer must name `<siteUrl>/mcp-server` in its audience. */
 export const MCP_PATH = '/mcp-server'
@@ -41,6 +45,7 @@ export function credentials (options: { required: boolean, mainSiteUrl: string, 
   }
   return async (req, res, next) => {
     delete req.headers[SCOPES_HEADER]
+    delete req.headers[ACCOUNT_HEADER]
     if (!hasSessionCredential(req)) {
       if (options.required && !req.headers['x-apikey'] && !req.headers['x-api-key']) {
         await challenge(req, res, false)
@@ -56,6 +61,7 @@ export function credentials (options: { required: boolean, mainSiteUrl: string, 
     // the scopes are checked per tool, by the handler that reads them
     markScopeChecked(sessionReq)
     let scopes: string[] | undefined
+    let account: CallerAccount | undefined
     try {
       const state = await session.req(sessionReq)
       // an id_token cookie without its signature reads as no session at all: not a verified caller
@@ -63,6 +69,7 @@ export function credentials (options: { required: boolean, mainSiteUrl: string, 
       // the bearer is read first and decides: on this server it is an NHI's, never a user's
       if (hasBearer(req) && !state.user.nhi) throw httpError(401, 'invalid token')
       scopes = state.scopes
+      if (state.account) account = { type: state.account.type, id: state.account.id }
     } catch (err) {
       if (options.required) {
         if ((err as { status?: number }).status === 401) await challenge(req, res, hasBearer(req))
@@ -73,6 +80,7 @@ export function credentials (options: { required: boolean, mainSiteUrl: string, 
       return next()
     }
     if (scopes) req.headers[SCOPES_HEADER] = JSON.stringify(scopes)
+    if (account) req.headers[ACCOUNT_HEADER] = JSON.stringify(account)
     next()
   }
 }
@@ -80,6 +88,12 @@ export function credentials (options: { required: boolean, mainSiteUrl: string, 
 /** The scopes the credentials middleware verified, undefined for an unscoped or anonymous caller. */
 export function scopesOf (request: Request | undefined): string[] | undefined {
   const header = request?.headers.get(SCOPES_HEADER)
+  return header ? JSON.parse(header) : undefined
+}
+
+/** The active account the credentials middleware verified, undefined for an API key or anonymous caller. */
+export function accountOf (request: Request | undefined): CallerAccount | undefined {
+  const header = request?.headers.get(ACCOUNT_HEADER)
   return header ? JSON.parse(header) : undefined
 }
 

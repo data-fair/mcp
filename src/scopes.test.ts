@@ -5,7 +5,7 @@ import express from 'express'
 import { session } from '@data-fair/lib-express'
 import { startFakeSite, type FakeSite } from '../test/fake-site.ts'
 import { bearerFor, cookieFor, nhiClaims, userClaims, USER } from '../test/tokens.ts'
-import { credentials, scopesOf, stdioSession, SCOPES_HEADER, sessionOptions } from './scopes.ts'
+import { accountOf, ACCOUNT_HEADER, credentials, scopesOf, stdioSession, SCOPES_HEADER, sessionOptions } from './scopes.ts'
 import { createDispatcher } from './site-fetch.ts'
 
 const FORWARDED = { 'x-forwarded-host': 'portal.test', 'x-forwarded-proto': 'https', 'x-forwarded-for': '203.0.113.7' }
@@ -24,7 +24,7 @@ describe('credentials', () => {
     for (const required of [true, false]) {
       app.post(required ? '/required' : '/optional', credentials({ required, mainSiteUrl: site.origin }), (req, res) => {
         const request = new Request('http://x' + req.url, { headers: req.headers as Record<string, string> })
-        res.json({ scopes: scopesOf(request) ?? null, cookie: req.headers.cookie ?? null, authorization: req.headers.authorization ?? null })
+        res.json({ scopes: scopesOf(request) ?? null, account: accountOf(request) ?? null, cookie: req.headers.cookie ?? null, authorization: req.headers.authorization ?? null })
       })
     }
     app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -97,6 +97,27 @@ describe('credentials', () => {
   it('strips a client-sent x-mcp-scopes', async () => {
     assert.equal((await body(await call('/required', { 'x-apikey': 'k', [SCOPES_HEADER]: '["x"]' }))).scopes, null)
     assert.equal((await body(await call('/optional', { [SCOPES_HEADER]: '["x"]' }))).scopes, null)
+  })
+  describe('active account', () => {
+    const COMMUNE = { id: 'commune-x', name: 'Commune X', role: 'user', department: 'd1', departmentName: 'D1' }
+    const user = { ...USER, organizations: [...USER.organizations, COMMUNE] }
+    it('credentials sets the active account', async () => {
+      const cookie = `${cookieFor(user)}; id_token_org=commune-x; id_token_dep=d1`
+      assert.deepEqual((await body(await call('/required', { cookie }))).account, { type: 'organization', id: 'commune-x' })
+    })
+    it('the same cookie switched to another account reads the new account', async () => {
+      const token = cookieFor(user)
+      assert.deepEqual((await body(await call('/required', { cookie: token }))).account, { type: 'user', id: 'user1' })
+      assert.deepEqual((await body(await call('/required', { cookie: `${token}; id_token_org=org2` }))).account, { type: 'organization', id: 'org2' })
+    })
+    it('a caller-sent x-mcp-account header is stripped', async () => {
+      const spoof = JSON.stringify({ type: 'organization', id: 'victim' })
+      assert.equal((await body(await call('/optional', { [ACCOUNT_HEADER]: spoof }))).account, null)
+      assert.equal((await body(await call('/required', { 'x-apikey': 'k', [ACCOUNT_HEADER]: spoof }))).account, null)
+    })
+    it('an API key caller has no account', async () => {
+      assert.equal((await body(await call('/required', { 'x-apikey': 'k' }))).account, null)
+    })
   })
   it('serves a bad cookie anonymously when not required, without forwarding it', async () => {
     const cookie = cookieFor(USER, { expiresIn: -1 })

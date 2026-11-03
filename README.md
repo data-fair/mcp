@@ -93,6 +93,18 @@ Routes:
 - `GET /ai-catalog.json` — the site's AI Catalog (the MCP Server Card of the datasets server); route `/.well-known/ai-catalog.json` of every site host here
 - `GET /status` — services of the platform document, last refresh time, datasets tools missing from the document, active extra tools; in-cluster callers only
 
+### Registry skills
+
+With `PRIVATE_REGISTRY_URL` set, `/mcp` also serves the registry's `skill` artefacts visible to the
+caller's active account (public ones for an API key). Deployment notes:
+
+- `PRIVATE_REGISTRY_URL` must be the registry's in-cluster URL: the registry honours its internal
+  secret only for in-cluster requests. Through a public URL listings silently become public-only and
+  downloads answer `403`, visible only in `/status` (`registry.error`).
+- `SECRET_REGISTRY` must equal the registry's internal-services secret.
+- `REGISTRY_CACHE_DIR` must be writable (an `emptyDir` volume on a read-only root filesystem) and not
+  shared across replicas.
+
 ## Environment variables
 
 | Variable              | Description                                                                                                                                                              | Default | Mode              |
@@ -114,6 +126,10 @@ Routes:
 | `FILE_URL_PREFIXES`   | Comma-separated URL prefixes of the agents' file store (endpoint and bucket path, e.g. `https://s3.example.com/agents/`); the only URLs a file input is fetched from. Unset: tools that need a file are not offered. | — | standalone/stack |
 | `FILE_MAX_SIZE`       | Largest file accepted, in bytes. | `104857600` | standalone/stack |
 | `FILE_TIMEOUT`        | Seconds from the request to the last byte of a file. | `300` | standalone/stack |
+| `PRIVATE_REGISTRY_URL` | In-cluster URL of the registry whose `skill` artefacts the platform server serves (see Registry skills). Unset: no registry skills. | — | stack only |
+| `SECRET_REGISTRY`     | The registry's internal-services secret. Required with `PRIVATE_REGISTRY_URL`. | — | stack only |
+| `REGISTRY_LISTING_TTL` | Seconds a registry listing is reused per account before the registry is asked again. | `60` | stack only |
+| `REGISTRY_CACHE_DIR`  | Directory where skill packages are downloaded and extracted; must be writable, one per replica. | `/tmp/skills` | stack only |
 | `EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE` | JSON boolean; whether `geocode_address` is served at all, e.g. `EXTRA_TOOLS_GEOCODE_ADDRESS_ACTIVE=false`.                                             | `true`  | standalone/stack   |
 | `EXTRA_TOOLS_GEOCODE_ADDRESS_LIMITS` | JSON: `{ "global": { "nb", "duration" }, "perCaller": { "nb", "duration" } }`, calls to IGN per instance and per caller (IGN allows 50 requests per second per source IP: divide by replicas). | 40/s, 10/s | standalone/stack |
 

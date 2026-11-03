@@ -8,7 +8,9 @@ import config from '#config'
 import { requestContext, siteOriginOf } from './context.ts'
 import { linksOnSite } from './site-links.ts'
 import { aiCatalogDocument } from './ai-catalog.ts'
-import { credentials, scopesOf } from './scopes.ts'
+import { composeSkills } from './compose-skills.ts'
+import type { RegistrySkills } from './registry.ts'
+import { accountOf, credentials, scopesOf } from './scopes.ts'
 import { protectedResourceMetadata, resourceMetadataRoute, resourceMetadataUrl, scopesSupported } from './oauth-discovery.ts'
 import type { Platform } from './platform.ts'
 import type { SiteDispatcher } from './site-fetch.ts'
@@ -20,8 +22,9 @@ const siteOf = (req: Request) => siteOriginOf(headersOf(req), config.mainSiteUrl
 
 /**
  * issuerOf: the SD issuer of a site, undefined when it offers no OAuth (src/oauth-discovery.ts).
+ * registry: the skills of the registry, served on the platform server only.
  */
-export function createApp (platform: Platform, dispatcher: SiteDispatcher, issuerOf: (siteOrigin: string) => Promise<string | undefined>) {
+export function createApp (platform: Platform, dispatcher: SiteDispatcher, issuerOf: (siteOrigin: string) => Promise<string | undefined>, registry?: RegistrySkills) {
   const app = express()
   app.set('query parser', 'simple')
   app.set('json spaces', 2)
@@ -49,7 +52,7 @@ export function createApp (platform: Platform, dispatcher: SiteDispatcher, issue
   // the MCP handler passes the fetch Request (globalThis.Request), not Express's `Request` imported above
   const onSite = (request: globalThis.Request | undefined) => (toolSet: ToolSet) => linksOnSite(toolSet, siteOriginOf(request, config.mainSiteUrl!), config.mainSiteUrl!)
   // the scopes the credentials middleware verified: scopesOf is only read behind credentials(...)
-  const main = createMcpHttpHandler((request) => onSite(request)(platform.platform(scopesOf(request))), { name: 'datafair-mcp-server', version }, options)
+  const main = createMcpHttpHandler(async (request) => onSite(request)(composeSkills(platform.platform(scopesOf(request)), registry ? await registry.skillsFor(accountOf(request)) : [])), { name: 'datafair-mcp-server', version }, options)
   const datasets = createMcpHttpHandler((request) => onSite(request)(platform.datasets(scopesOf(request))), { name: 'datafair-datasets-mcp-server', version }, options)
   platform.onChange(() => { for (const h of [main, datasets]) { h.notify.toolsChanged(); h.notify.resourcesChanged() } })
 
@@ -80,7 +83,7 @@ export function createApp (platform: Platform, dispatcher: SiteDispatcher, issue
   })
   app.get('/status', (req, res) => {
     assertReqInternal(req)
-    res.json({ mainSiteUrl: config.mainSiteUrl, ...platform.status(), extraTools: config.extraTools })
+    res.json({ mainSiteUrl: config.mainSiteUrl, ...platform.status(), extraTools: config.extraTools, ...(registry && { registry: registry.status() }) })
   })
 
   app.use(errorHandler)

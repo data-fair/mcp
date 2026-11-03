@@ -7,6 +7,7 @@ import { session } from '@data-fair/lib-express'
 import { createPlatform, type Platform } from './platform.ts'
 import { createApp } from './app.ts'
 import { sessionOptions } from './scopes.ts'
+import { createRegistrySkills } from './registry.ts'
 import { createIssuerLookup } from './oauth-discovery.ts'
 
 export interface Runtime {
@@ -34,7 +35,10 @@ export async function createRuntime (config: ApiConfig): Promise<Runtime> {
   session.init(config.privateDirectoryUrl, undefined, undefined, sessionOptions)
   const platform = await createPlatform({ config, dispatcher, mainSiteUrl })
   const issuerOf = createIssuerLookup({ mainSiteUrl, dispatcher, trustedForwarder: config.trustedForwarder })
-  const app = createApp(platform, dispatcher, issuerOf)
+  const { registry } = config
+  if (registry?.url && !registry.secretKey) throw new Error('SECRET_REGISTRY is required with PRIVATE_REGISTRY_URL')
+  const registrySkills = registry?.url ? createRegistrySkills({ url: registry.url, secretKey: registry.secretKey!, listingTtl: registry.listingTtl ?? 60, cacheDir: registry.cacheDir ?? '/tmp/skills' }) : undefined
+  const app = createApp(platform, dispatcher, issuerOf, registrySkills)
 
   return { app, platform, dispatcher, mainSiteUrl }
 }
