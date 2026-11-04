@@ -71,7 +71,7 @@ const messages = {
     claudeOauth: 'Claude Code, OAuth login:',
     claudeApiKey: 'Claude Code, API key:',
     json: 'Clients configured by a JSON file:',
-    catalog: 'Machine-readable description of these servers:'
+    catalog: 'Machine-readable description of the datasets server (AI Catalog):'
   },
   fr: {
     title: 'Serveurs MCP',
@@ -97,7 +97,7 @@ const messages = {
     claudeOauth: 'Claude Code, connexion OAuth :',
     claudeApiKey: 'Claude Code, clé d\'API :',
     json: 'Clients configurés par un fichier JSON :',
-    catalog: 'Description de ces serveurs lisible par les machines :'
+    catalog: 'Description du serveur des jeux de données lisible par les machines (AI Catalog) :'
   }
 }
 
