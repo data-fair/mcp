@@ -158,7 +158,8 @@ caller on a portal receives a portal URL. An in-cluster caller without forwarded
 main site's.
 
 **Structured results.** Tool results carry the parsed JSON response as `structuredContent` (the
-agents service's code mode works on it); the text block stays what a model reads. No tool
+agents service's code mode works on it), projected like the text (`fields`, else `response_format`,
+else the concise set): a client may hand either one to the model, Claude Code shows the former. No tool
 publishes an `outputSchema`, which MCP leaves optional. Measured against data-fair's platform document
 (2026-10-13), a client that validates results — the TypeScript SDK 1.x does, in `listTools()` and
 `callTool()` — would fail: several response schemas embed the same nested `$id`, which one Ajv
