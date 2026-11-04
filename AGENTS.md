@@ -21,7 +21,7 @@ Two usage modes:
 - **Data Fair stack mode**: deployed as a web service alongside Data Fair (available on
   `/mcp-server` on the same domain). Uses HTTP transport. One published deployment for every
   caller, the agents service included; data-fair's permissions decide what a caller may do.
-  `/mcp-server/ai-catalog.json` publishes both servers' cards.
+  `/mcp-server/ai-catalog.json` publishes the datasets server's card.
 
 ## Tech stack
 

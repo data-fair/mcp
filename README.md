@@ -91,7 +91,7 @@ Routes:
 - `POST /mcp` — the platform server; `401` with a `WWW-Authenticate` challenge without credentials, and for a cookie or bearer that does not verify
 - `GET /.well-known/oauth-protected-resource/mcp` — the platform server's protected-resource metadata, on OAuth sites only (`404` elsewhere)
 - `POST /datasets/mcp` — the datasets server (see Compatibility). A cookie or bearer that does not verify is dropped, not forwarded, and the caller served anonymously; valid credentials are forwarded and their scopes filter the six tools
-- `GET /ai-catalog.json` — the site's AI Catalog (the MCP Server Cards of the platform and datasets servers); route `/.well-known/ai-catalog.json` of every site host here
+- `GET /ai-catalog.json` — the site's AI Catalog (the MCP Server Card of the datasets server); route `/.well-known/ai-catalog.json` of every site host here
 - `GET /status` — services of the platform document, last refresh time, datasets tools missing from the document, active extra tools; in-cluster callers only
 
 ### Registry skills

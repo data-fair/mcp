@@ -92,7 +92,7 @@ describe('server: createRuntime', () => {
     const { http, base } = await listenOn(runtime.app)
     try {
       const catalog: any = await (await fetch(`${base}/ai-catalog.json`)).json()
-      assert.deepEqual(catalog.entries.map((e: any) => e.data.remotes[0].url), [`${site.origin}/mcp-server/mcp`, `${site.origin}/mcp-server/datasets/mcp`])
+      assert.equal(catalog.entries[0].data.remotes[0].url, `${site.origin}/mcp-server/datasets/mcp`)
     } finally {
       runtime.platform.close()
       await new Promise<void>(resolve => http.close(() => resolve()))
