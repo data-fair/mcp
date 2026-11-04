@@ -1,5 +1,16 @@
-.type
-node_modules
-.vscode
+# dependencies and generated code
+node_modules/
+.type/
+
+# local environment and data
 .env
 **/config/local-*
+dev/logs/
+
+# agent working files
+docs/superpowers/
+.superpowers/
+.playwright-mcp/
+
+# mcp
+.vscode

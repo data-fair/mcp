@@ -9,7 +9,16 @@
     "allowJs": true,
     "checkJs": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "types": [
+      "node"
+    ],
+    "erasableSyntaxOnly": true
   },
-  "exclude": ["node_modules", ".type", "dev", "test-it"]
+  "exclude": [
+    "node_modules",
+    ".type",
+    "dev",
+    "test-it"
+  ]
 }
