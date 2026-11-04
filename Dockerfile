@@ -43,7 +43,7 @@ FROM installer AS server-installer
 
 # remove other workspaces and reinstall, otherwise we can get rig have some peer dependencies from other workspaces
 RUN npm ci --prefer-offline --omit=dev --omit=optional --no-audit --no-fund && \
-    npx clean-modules --yes
+    npx clean-modules --yes "!yaml/dist/doc/"
 
 # =============================
 # Final Image
