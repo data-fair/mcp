@@ -1,28 +1,19 @@
+// Dev environment of mcp, see @data-fair/lib-dev. Agents: npx --no df-dev status | logs <pane> | restart <pane>
 layout {
-  pane {
-    split_direction "vertical"
-    pane name="MCP" borderless=true {
-      command "bash"
-      args "-ic" "nvm use > /dev/null 2>&1 && bash"
-    }
-    // pane name="deps" {
-    //   command "bash"
-    //   args "-ic" "npm run dev-deps && watch -n 4 \"docker compose ps --all --format 'table {{.Name}}\t{{.Status}}'\""
-    // }
+  pane split_direction="vertical" {
+    pane name="mcp" borderless=true
+    // no containers: the MCP server calls the remote site of config/development.cjs (portalUrl)
+    pane name="status" command="./node_modules/.bin/df-status"
   }
-  pane {
-    split_direction "vertical"
-    pane name="mcp-server (HTTP)" {
-      command "bash"
-      args "-ic" "nvm use > /dev/null 2>&1 && npm run dev-http"
+  pane split_direction="vertical" {
+    pane name="api" command="bash" {
+      args "-c" "FORCE_COLOR=1 NODE_ENV=development DEBUG=rate-limiting TRANSPORT=http PORT=$DEV_API_PORT OBSERVER_PORT=$DEV_OBSERVER_PORT exec ./node_modules/.bin/nodemon -e js,ts,cjs,json index.ts"
     }
-    pane name="inspector" {
-      command "bash"
-      args "-ic" "nvm use > /dev/null 2>&1 && npm run dev-inspector -- --server dev-streamable"
+    pane name="inspector" command="bash" {
+      args "-c" "CLIENT_PORT=$INSPECTOR_PORT SERVER_PORT=$INSPECTOR_PROXY_PORT exec ./node_modules/.bin/mcp-inspector --transport http --server-url http://localhost:$DEV_API_PORT/mcp-server/mcp"
     }
   }
-  pane size=2 borderless=true {
-    command "bash"
-    args "-ic" "echo -n -e \"Inspector at \\e[1;96mhttp://localhost:6274\\033[0m\""
+  pane name="url" size=1 borderless=true command="bash" {
+    args "-c" "echo -n -e \"MCP servers at \\e[1;96mhttp://localhost:$DEV_API_PORT/mcp-server/mcp\\e[0m and /mcp-server/datasets/mcp, the inspector pane prints its URL (with its token)\"; exec sleep infinity"
   }
 }

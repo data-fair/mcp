@@ -1,0 +1,8 @@
+{
+  "ports": ["DEV_API_PORT", "DEV_OBSERVER_PORT", "INSPECTOR_PORT", "INSPECTOR_PROXY_PORT"],
+  "panes": {
+    "api": { "ready": "http://localhost:${DEV_API_PORT}/mcp-server/ai-catalog.json" },
+    "inspector": { "ready": "http://localhost:${INSPECTOR_PORT}/" }
+  },
+  "url": "http://localhost:${INSPECTOR_PORT}/"
+}
