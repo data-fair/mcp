@@ -289,7 +289,7 @@ describe('app', () => {
       assert.ok(!(await client.listTools()).tools.some(t => t.name === 'calculate_metric'))
     } finally { await client.close() }
   })
-  it('publishes the datasets server card in the AI catalog', async () => {
+  it('publishes the platform and datasets server cards in the AI catalog', async () => {
     const res = await fetch(`${base}/mcp-server/ai-catalog.json`, { headers: PROXY })
     assert.equal(res.status, 200)
     assert.match(res.headers.get('content-type') ?? '', /^application\/ai-catalog\+json/)
@@ -297,14 +297,17 @@ describe('app', () => {
     assert.equal(res.headers.get('vary'), 'X-Forwarded-Host')
     const doc: any = await res.json()
     assert.equal(doc.specVersion, '1.0')
-    assert.equal(doc.entries.length, 1)
-    assert.equal(doc.entries[0].type, 'application/mcp-server-card+json')
-    assert.equal(doc.entries[0].identifier, 'urn:air:portal.test:mcp:datasets')
-    const card = doc.entries[0].data
-    assert.equal(card.$schema, 'https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json')
-    assert.equal(card.name, 'fr.data-fair/datasets')
-    assert.ok(card.description)
-    assert.deepEqual(card.remotes, [{ type: 'streamable-http', url: 'https://portal.test/mcp-server/datasets/mcp' }])
+    assert.deepEqual(doc.entries.map((e: any) => e.identifier), ['urn:air:portal.test:mcp:platform', 'urn:air:portal.test:mcp:datasets'])
+    for (const entry of doc.entries) {
+      assert.equal(entry.type, 'application/mcp-server-card+json')
+      assert.equal(entry.data.$schema, 'https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json')
+      assert.ok(entry.data.description)
+    }
+    const [platform, datasets] = doc.entries.map((e: any) => e.data)
+    assert.equal(platform.name, 'fr.data-fair/platform')
+    assert.deepEqual(platform.remotes, [{ type: 'streamable-http', url: 'https://portal.test/mcp-server/mcp' }])
+    assert.equal(datasets.name, 'fr.data-fair/datasets')
+    assert.deepEqual(datasets.remotes, [{ type: 'streamable-http', url: 'https://portal.test/mcp-server/datasets/mcp' }])
   })
   it('no longer serves /profiles nor /v0/servers', async () => {
     for (const path of ['/mcp-server/profiles', '/mcp-server/v0/servers']) {
