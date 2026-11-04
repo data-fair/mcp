@@ -19,8 +19,7 @@ export function normalizeLists<T extends { files?: { urlPrefixes?: unknown } }> 
 }
 
 // we reload the config instead of using the singleton from the config module for testing purposes
-// @ts-ignore
-const apiConfig = process.env.NODE_ENV === 'test' ? config.util.loadFileConfigs(process.env.NODE_CONFIG_DIR, { skipConfigSources: true }) : config
+const apiConfig: Record<string, any> = process.env.NODE_ENV === 'test' ? config.util.loadFileConfigs(process.env.NODE_CONFIG_DIR, { skipConfigSources: true }) : config
 
 normalizeLists(apiConfig)
 assertValid(apiConfig, { lang: 'en', name: 'config', internal: true })

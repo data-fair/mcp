@@ -10,7 +10,8 @@ layout {
       args "-c" "FORCE_COLOR=1 NODE_ENV=development DEBUG=rate-limiting TRANSPORT=http PORT=$DEV_API_PORT OBSERVER_PORT=$DEV_OBSERVER_PORT exec ./node_modules/.bin/nodemon -e js,ts,cjs,json index.ts"
     }
     pane name="inspector" command="bash" {
-      args "-c" "CLIENT_PORT=$INSPECTOR_PORT SERVER_PORT=$INSPECTOR_PROXY_PORT exec ./node_modules/.bin/mcp-inspector --transport http --server-url http://localhost:$DEV_API_PORT/mcp-server/mcp"
+      // inspector 2: SERVER_PORT is the MCP Apps sandbox; the app origin takes any free port (its default, 6278, is shared by every checkout)
+      args "-c" "CLIENT_PORT=$INSPECTOR_PORT SERVER_PORT=$INSPECTOR_PROXY_PORT MCP_APP_ORIGIN_PORT=0 exec ./node_modules/.bin/mcp-inspector --transport http --server-url http://localhost:$DEV_API_PORT/mcp-server/mcp"
     }
   }
   pane name="url" size=1 borderless=true command="bash" {
