@@ -8,9 +8,10 @@ import config from '#config'
 import { requestContext, siteOriginOf } from './context.ts'
 import { linksOnSite } from './site-links.ts'
 import { aiCatalogDocument } from './ai-catalog.ts'
+import { homePage, homePageCsp, negotiateLocale } from './home-page.ts'
 import { composeSkills } from './compose-skills.ts'
 import type { RegistrySkills } from './registry.ts'
-import { accountOf, credentials, scopesOf } from './scopes.ts'
+import { accountOf, credentials, MCP_PATH, scopesOf } from './scopes.ts'
 import { protectedResourceMetadata, resourceMetadataRoute, resourceMetadataUrl, scopesSupported } from './oauth-discovery.ts'
 import type { Platform } from './platform.ts'
 import type { SiteDispatcher } from './site-fetch.ts'
@@ -80,6 +81,13 @@ export function createApp (platform: Platform, dispatcher: SiteDispatcher, issue
     res.set('Access-Control-Allow-Origin', '*')
     res.type('application/ai-catalog+json')
     res.send(JSON.stringify(aiCatalogDocument({ siteOrigin: siteOf(req), version }), null, 2))
+  })
+  // the home page: the servers' URLs on this site and how to connect, OAuth or API key
+  app.get('/', async (req, res) => {
+    const oauth = !!(await issuerOfReq(req))
+    const locale = negotiateLocale(req.headers['accept-language'], config.locale)
+    res.set({ 'Cache-Control': 'public, max-age=300', Vary: 'X-Forwarded-Host, Accept-Language', 'Content-Security-Policy': homePageCsp, 'X-Content-Type-Options': 'nosniff' })
+    res.type('html').send(homePage({ serverUrl: siteOf(req) + reqSitePathSafe(req) + MCP_PATH, oauth, locale, version }))
   })
   app.get('/status', (req, res) => {
     assertReqInternal(req)

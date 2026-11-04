@@ -393,6 +393,36 @@ describe('app', () => {
       assert.equal(res.headers.get('access-control-allow-origin'), '*')
       assert.match(res.headers.get('access-control-allow-headers') ?? '', /Mcp-Protocol-Version/)
     })
+    it('serves a home page with the OAuth login on an issuer site', async () => {
+      const res = await fetch(`${base}/mcp-server/`, { headers: { ...PROXY, 'accept-language': 'en' } })
+      assert.equal(res.status, 200)
+      assert.match(res.headers.get('content-type') ?? '', /^text\/html/)
+      assert.match(res.headers.get('content-security-policy') ?? '', /default-src 'none'/)
+      assert.equal(res.headers.get('vary'), 'X-Forwarded-Host, Accept-Language')
+      const html = await res.text()
+      assert.match(html, /<html lang="en">/)
+      assert.ok(html.includes('https://portal.test/mcp-server/mcp'))
+      assert.ok(html.includes('https://portal.test/mcp-server/datasets/mcp'))
+      assert.match(html, /<h3>OAuth login/)
+      assert.ok(html.includes('claude mcp add --transport http datafair https://portal.test/mcp-server/mcp<'))
+    })
+    it('serves a home page in french, with an API key only off issuer sites', async () => {
+      site.setDiscovery(404)
+      try {
+        const html = await (await fetch(`${base}/mcp-server/`, { headers: { ...fresh(), 'accept-language': 'fr-FR,fr;q=0.9' } })).text()
+        assert.match(html, /<html lang="fr">/)
+        assert.match(html, /ne propose pas de connexion OAuth/)
+        assert.doesNotMatch(html, /<h3>Connexion OAuth/)
+        assert.match(html, /x-apiKey/)
+      } finally { site.setDiscovery('default') }
+    })
+    it('names the servers under the path prefix of a site', async () => {
+      const html = await (await fetch(`${base}/portal/mcp-server/`, { headers: PROXY })).text()
+      assert.ok(html.includes('https://portal.test/portal/mcp-server/mcp'))
+      assert.match(html, /x-apiKey/)
+      assert.match(html, /offers no OAuth login/)
+      assert.doesNotMatch(html, /<h3>OAuth login/)
+    })
     it('follows the platform document in scopes_supported', async () => {
       site.setDoc(doc => {
         const op = Object.values<any>(doc.paths).map(p => p.get).find(get => get?.['x-agent'])
