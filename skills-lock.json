@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "deps-refresh": {
+      "source": "data-fair/lib",
+      "sourceType": "github",
+      "skillPath": "skills/deps-refresh/SKILL.md",
+      "computedHash": "c5097da4a5c31af5b5e24600a98e8b81fb12334233a830c9f9347f4f8d419c99"
+    },
     "pr-ready": {
       "source": "data-fair/lib",
       "sourceType": "github",
