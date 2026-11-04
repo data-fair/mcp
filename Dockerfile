@@ -1,7 +1,10 @@
 # =============================
 # Base Node image
 # =============================
-FROM node:24.14.0-alpine3.23 AS base
+FROM node:24.22.2-alpine3.24@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS base
+
+# pick up alpine security fixes released after this base image was published
+RUN apk upgrade --no-cache
 
 WORKDIR /app
 ENV NODE_ENV=production
@@ -49,6 +52,10 @@ RUN npm ci --prefer-offline --omit=dev --omit=optional --no-audit --no-fund && \
 # Final Image
 # =============================
 FROM base AS main
+
+# npm and corepack are only needed by the build stages, never to run the service
+# (the registry's skill packages are extracted without "npm rebuild": no build option)
+RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 
 ADD /src src
 ADD /index.ts index.ts

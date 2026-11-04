@@ -91,10 +91,42 @@ Two usage modes:
 - `geocode_address` is the one hand-written tool (IGN has no `x-agent` document); it is an
   `openapi-mcp` `Tool` whose `execute` never throws, appended after the scope filter
 
+## Dev environment
+
+The dev environment is the shared one of the data-fair services (`@data-fair/lib-dev`, the
+`data-fair-service` skill of data-fair/lib): one zellij session per checkout, readable by humans,
+operated by agents only through `df-dev`. `dev/dev.json` declares the drawn ports and the panes'
+readiness URLs, `.zellij.kdl` the panes: `status` (memory, no containers), `api` (the MCP server in
+HTTP mode under nodemon), `inspector` (the MCP inspector on the platform server), and a free shell.
+No containers: the server calls the remote site of `config/development.cjs` (`portalUrl`).
+
+The user starts the session (`npm run dev-zellij`). An agent never starts or kills it.
+
+| Need | Command |
+|---|---|
+| What runs, what is broken | `npx --no df-dev status` (panes running / exited / **not ready**, memory) |
+| A process's output | `npx --no df-dev logs <pane> -n 100` (`api`, `inspector`) |
+| Restart one process | `npx --no df-dev restart <pane>`: Ctrl+C, rerun, waits for the pane's readiness URL |
+
+- Read the logs before restarting: nodemon already reloads on file changes.
+- "not ready" from `restart` → report to the user with the logs, never retry in a loop.
+- Never `kill`, `zellij action`, nor `npm ci` / `npm install` while the env runs
+  (watchers restart on half-installed modules).
+- Always `npx --no`: a bare `npx df-dev` downloads an unrelated public package when the dependency is
+  missing (dependency confusion). Scripts and CI call `./node_modules/.bin/df-dev`.
+
+The servers answer on `http://localhost:$DEV_API_PORT/mcp-server/mcp` and `/mcp-server/datasets/mcp`;
+the inspector pane prints its URL with its session token. Ports are drawn per checkout into `.env`
+(`npx --no df-dev init-env`). Do not modify them.
+
+Worktrees, from the main checkout: `npx --no df-worktree <branch>` / `npx --no df-worktree-delete <branch>`
+(branch names: letters, digits, `.`, `_`, `-`, no `/`, and `mcp_<branch>` at most 60 characters).
+
+Stdio, outside the session: `TRANSPORT=stdio PORTAL_URL=<site> node index.ts` (`MCP_SERVER=platform`
+with `DATA_FAIR_API_KEY`).
+
 ## Commands
 
-- `npm run dev-stdio` — dev with stdio transport
-- `npm run dev-http` — dev with HTTP transport
-- `npm run dev-inspector` — MCP inspector UI
+- `npm run dev-zellij` — the dev session (see "Dev environment")
 - `npm run quality` — lint + build-types + type-check + tests
 - `npm run lint-fix` — auto-fix lint issues

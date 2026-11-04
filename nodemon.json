@@ -1,0 +1,5 @@
+{
+  "execMap": { "ts": "node" },
+  "ignoreRoot": [],
+  "ignore": ["node_modules/", ".type/", "config/type/", "**/*.test.ts", "test/", "docs/", "evals/", "live-test/", "dev/"]
+}
