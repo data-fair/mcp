@@ -87,6 +87,7 @@ exception is `geocode_address`, which calls IGN: a global budget per instance an
 
 Routes:
 
+- `GET /` — the home page: both servers' URLs on the requesting site, how the platform server authenticates there (OAuth login on issuer sites, API key), client examples; french or english by `Accept-Language`, else `LOCALE`
 - `POST /mcp` — the platform server; `401` with a `WWW-Authenticate` challenge without credentials, and for a cookie or bearer that does not verify
 - `GET /.well-known/oauth-protected-resource/mcp` — the platform server's protected-resource metadata, on OAuth sites only (`404` elsewhere)
 - `POST /datasets/mcp` — the datasets server (see Compatibility). A cookie or bearer that does not verify is dropped, not forwarded, and the caller served anonymously; valid credentials are forwarded and their scopes filter the six tools

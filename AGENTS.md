@@ -37,7 +37,7 @@ Two usage modes:
 - `index.ts` — entrypoint, picks transport (stdio vs HTTP)
 - `src/config.ts` — config loader (uses `config` package + generated types in `config/type/`)
 - `src/server.ts` — HTTP server setup
-- `src/app.ts` — Express app: the `/mcp` and `/datasets/mcp` routes, `/ai-catalog.json`, `/status`
+- `src/app.ts` — Express app: the `/mcp` and `/datasets/mcp` routes, the home page, `/ai-catalog.json`, `/status`
 - `src/live-document.ts` — the platform document kept live (conditional re-fetch, skill bodies)
 - `src/platform.ts` — the two tool sets derived from the live document, `geocode_address`
   appended, the refresh loop
@@ -50,6 +50,7 @@ Two usage modes:
 - `src/compose-skills.ts` — API-doc skills plus the registry's, cut to the caller's granted tools
 - `src/editor-schema.ts` — form-schema preparation for the editor tools
 - `src/ai-catalog.ts` — the `/ai-catalog.json` document
+- `src/home-page.ts` — the `/mcp-server/` home page (how to connect, per site)
 - `src/site-fetch.ts` — origin swap, dispatcher (DNS cache, optional in-cluster proxy hop)
 - `src/context.ts` — request → `CallContext` (site origin, forwarded credentials, identity)
 - `src/tools/geocode-address.ts`, `src/tools/geocode-limits.ts` — the IGN geocoder, the one
