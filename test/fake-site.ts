@@ -67,6 +67,10 @@ export async function startFakeSite (): Promise<FakeSite> {
       })
       return
     }
+    // a preview: a rendered image inside a JSON body (a 1x1 png), for the `response.image` tools
+    if (url.pathname === '/data-fair/api/v1/datasets/ds1/preview') {
+      return json({ title: 'Preview', image: { mediaType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==' } })
+    }
     // the account listing and the catalog listing answer the same canned page
     if (url.pathname === '/data-fair/api/v1/datasets' || url.pathname === '/data-fair/api/v1/catalog/datasets') {
       return json({ count: 1, results: [{ id: 'ds1', slug: 'ds1', title: `Seen by ${req.headers['x-forwarded-host'] ?? req.headers.host}`, summary: `cookie=${req.headers.cookie ?? ''} apikey=${req.headers['x-apikey'] ?? ''}`, count: 1, status: 'finalized', updatedAt: '2026-01-01T00:00:00Z', page: `${origin}/datasets/ds1` }] })
