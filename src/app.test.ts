@@ -128,8 +128,21 @@ describe('app', () => {
   })
 
   before(async () => {
-    site = await startFakeSite();
-    ({ server: store, origin: storeOrigin } = await listen((req, res) => {
+    site = await startFakeSite()
+    // a platform tool whose response carries an image (openapi-mcp `response.image`)
+    site.setDoc(doc => {
+      doc.paths['/data-fair/api/v1/datasets/{id}/preview'] = {
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'string' } }],
+        get: {
+          operationId: 'datafair_previewDataset',
+          'x-agent': { name: 'datafair_preview_dataset', description: 'Render a preview of a dataset.', response: { image: '/image' } },
+          'x-permissionClass': 'read',
+          security: [{ apiKey: [] }, { sdCookie: [] }, { oauth2: ['datasets:read'] }],
+          responses: { 200: { description: 'The preview.', content: { 'application/json': { schema: { type: 'object', properties: { title: { type: 'string' }, image: { type: 'object', properties: { mediaType: { type: 'string' }, data: { type: 'string' } } } } } } } } }
+        }
+      }
+    })
+    ;({ server: store, origin: storeOrigin } = await listen((req, res) => {
       storeHeaders.push(req.headers)
       res.writeHead(200, { 'content-type': 'text/csv', 'content-length': 8 })
       res.end('a,b\n1,2\n')
@@ -238,6 +251,17 @@ describe('app', () => {
       const res: any = await inCluster.callTool({ name: 'datafair_download_dataset_file', arguments: { datasetId: 'ds1' } })
       assert.equal(res.content.find((c: any) => c.type === 'resource_link').uri, `${site.origin}/data-fair/api/v1/datasets/ds1/raw`)
     } finally { await inCluster.close() }
+  })
+  it('returns an image part for a tool annotated response.image', async () => {
+    const client = await connect('/mcp', { 'x-apikey': 'key' })
+    try {
+      const res: any = await client.callTool({ name: 'datafair_preview_dataset', arguments: { id: 'ds1' } })
+      assert.equal(res.isError, undefined, res.content[0].text)
+      const image = res.content.find((c: any) => c.type === 'image')
+      assert.equal(image.mimeType, 'image/png')
+      assert.match(image.data, /^iVBORw0KGgo/)
+      assert.ok(!JSON.stringify(res.structuredContent ?? {}).includes('iVBORw0KGgo'), 'the image stays out of the structured content')
+    } finally { await client.close() }
   })
   it('uploads a file from the store through the site, with an exact length and none of the caller credentials sent to the store', async () => {
     const cookie = cookieFor(USER)
