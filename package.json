@@ -31,7 +31,7 @@
     "@data-fair/lib-types-builder": "^1.14.6",
     "@data-fair/openapi-mcp": "^0.13.0",
     "@json-layout/agents": "^0.5.1",
-    "@json-layout/core": "^2.14.0",
+    "@json-layout/core": "^2.14.1",
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "config": "^5.0.1",
