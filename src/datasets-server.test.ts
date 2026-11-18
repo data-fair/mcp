@@ -23,6 +23,13 @@ describe('datasets server', () => {
     assert.ok(toolSet.skills.some(s => s.name === 'datafair-workflow'))
     assert.ok(toolSet.skills.every(s => !s.tools?.length || s.tools.every(t => t in DATASETS_TOOLS)))
   })
+  it('renames the tools a skill body names, and its digest follows', () => {
+    const skill = { name: 'w', description: 'd', body: 'Call **datafair_search_data**, then datafair_aggregate_data; not datafair_update_dataset.', digest: 'sha256:old' }
+    const [served] = datasetsToolSet({ ...platformSet, skills: [skill], guides: [] }).toolSet.skills
+    assert.equal(served.body, 'Call **search_data**, then aggregate_data; not datafair_update_dataset.')
+    assert.match(served.digest, /^sha256:[0-9a-f]{64}$/)
+    assert.notEqual(served.digest, skill.digest)
+  })
   it('renames the tool lists of skills and guides whose tools are all mapped', () => {
     const skill = { name: 's', description: 'd', body: '', digest: '', tools: ['datafair_search_data', 'datafair_list_datasets'] }
     const outside = { ...skill, name: 'o', tools: ['datafair_search_data', 'datafair_update_dataset'] }

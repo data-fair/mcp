@@ -188,7 +188,7 @@ unprefixed, each mapped to a platform tool:
 
 Descriptions and input schemas come from the platform document and are read per session, so they
 may differ from what a 0.x client remembers. A mapped tool the document lacks is left out and
-reported in `/status`. Skills and guides are served only when all their tools are in the set.
+reported in `/status`. Skills and guides are served only when all their tools are in the set, and a skill's body names the tools by this server's names (the platform names it maps are renamed in the text).
 HTTP+SSE (`/sse`, `/messages`) is removed; only Streamable HTTP is served. In stdio, the datasets
 server is the default (`MCP_SERVER=datasets`).
 
