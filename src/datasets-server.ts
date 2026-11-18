@@ -46,3 +46,28 @@ export function datasetsToolSet (platform: ToolSet): { toolSet: ToolSet, missing
   }
   return { toolSet: { tools, skills, guides }, missing }
 }
+
+/**
+ * Platform tools the datasets server alone serves. The platform server is the back-office, where
+ * a call's outcome does not depend on the site it is made from; the published catalog of the
+ * site called from (list_datasets) is a visitor's view, which only that site answers, and its
+ * back-office counterpart is list_account_datasets.
+ */
+export const DATASETS_ONLY_TOOLS = new Set(['datafair_list_datasets'])
+
+/** The platform set without the datasets-only tools; a skill or guide loses their names and goes if that leaves it none. */
+export function backOfficeToolSet (platform: ToolSet): ToolSet {
+  const kept = (names: string[]) => names.filter(name => !DATASETS_ONLY_TOOLS.has(name))
+  const skills: ToolSet['skills'] = []
+  for (const skill of platform.skills) {
+    if (!skill.tools?.length) { skills.push(skill); continue }
+    const tools = kept(skill.tools)
+    if (tools.length) skills.push({ ...skill, tools })
+  }
+  const guides: ToolSet['guides'] = []
+  for (const guide of platform.guides) {
+    const tools = kept(guide.tools)
+    if (tools.length) guides.push({ ...guide, tools })
+  }
+  return { tools: platform.tools.filter(t => !DATASETS_ONLY_TOOLS.has(t.name)), skills, guides }
+}

@@ -12,8 +12,11 @@ Two MCP servers over data-fair's merged platform OpenAPI document
 [`@data-fair/openapi-mcp`](https://github.com/data-fair/openapi-mcp). The document is kept live:
 re-fetched conditionally on an interval, and clients are notified when the tools change.
 
-- the **platform server** — every tool of the document, cut down to what the caller's token scopes
-  allow (`toolsForScopes`). Always authenticated; tool names carry the `datafair_` prefix;
+- the **platform server** — the back-office: every tool of the document but the published
+  catalog's listing, cut down to what the caller's token scopes allow (`toolsForScopes`). Always
+  authenticated; tool names carry the `datafair_` prefix. It answers the same on any site of the
+  caller's account, so a client never has to pick one; the account's datasets are listed with
+  `datafair_list_account_datasets`;
 - the **datasets server** — the published catalog's six tools under the names earlier clients
   hard-coded (see Compatibility). Anonymous callers allowed.
 
@@ -175,7 +178,7 @@ unprefixed, each mapped to a platform tool:
 
 | Tool name | Platform tool |
 |-----------|---------------|
-| `list_datasets` | `datafair_list_datasets` |
+| `list_datasets` | `datafair_list_datasets` (served here only: it lists what the site called from publishes, a visitor's view) |
 | `describe_dataset` | `datafair_describe_dataset` |
 | `search_data` | `datafair_search_data` |
 | `get_field_values` | `datafair_get_field_values` |

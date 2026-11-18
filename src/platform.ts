@@ -7,7 +7,7 @@ import { toolsForScopes, type FileLoadOptions, type ToolSet } from '@data-fair/o
 import type { ApiConfig } from '#config'
 import { createLiveDocument } from './live-document.ts'
 import { prepareEditorSchema } from './editor-schema.ts'
-import { datasetsToolSet } from './datasets-server.ts'
+import { datasetsToolSet, backOfficeToolSet } from './datasets-server.ts'
 import { siteFetch, type SiteDispatcher } from './site-fetch.ts'
 import { geocodeAddressTool } from './tools/geocode-address.ts'
 
@@ -54,8 +54,10 @@ export async function createPlatform (options: { config: Pick<ApiConfig, 'locale
   const derive = (toolSet: ToolSet) => {
     // Structured content, but no output schema: the response schemas of the document cannot be
     // honoured exactly (README, "Structured results").
-    platformBase = { ...toolSet, tools: toolSet.tools.map(({ outputSchema, ...tool }) => tool) }
-    const datasets = datasetsToolSet(platformBase)
+    const documentTools = { ...toolSet, tools: toolSet.tools.map(({ outputSchema, ...tool }) => tool) }
+    // The datasets set is taken from every tool of the document; the platform set leaves out the ones it alone serves.
+    const datasets = datasetsToolSet(documentTools)
+    platformBase = backOfficeToolSet(documentTools)
     datasetsBase = datasets.toolSet
     missingDatasetsTools = datasets.missing
     if (missingDatasetsTools.length) console.warn(`datasets server: the platform document lacks ${missingDatasetsTools.join(', ')}`)

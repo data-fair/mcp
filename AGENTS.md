@@ -7,8 +7,9 @@ merged platform OpenAPI document (`x-agent` operations, turned into MCP tools by
 `@data-fair/openapi-mcp`), filtered by the caller's token scopes, plus `geocode_address`, the one
 hand-written tool. Two servers:
 
-- **platform server** (`/mcp`, or stdio with `MCP_SERVER=platform`): every tool the caller's
-  verified scopes allow, `datafair_` prefixed. Always authenticated.
+- **platform server** (`/mcp`, or stdio with `MCP_SERVER=platform`): the back-office, every tool
+  the caller's verified scopes allow but the published catalog's listing (`DATASETS_ONLY_TOOLS`),
+  `datafair_` prefixed. Always authenticated.
 - **datasets server** (`/datasets/mcp`, the stdio default): the published catalog's six tools plus
   `geocode_address` under the seven pre-1.0 names, unprefixed. Anonymous allowed.
 

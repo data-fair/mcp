@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { load } from '@data-fair/openapi-mcp'
-import { DATASETS_TOOLS, datasetsToolSet } from './datasets-server.ts'
+import { DATASETS_TOOLS, datasetsToolSet, backOfficeToolSet } from './datasets-server.ts'
 
 const doc = JSON.parse(await readFile(new URL('../test/fixtures/platform-api-docs.json', import.meta.url), 'utf8'))
 const platformSet = await load(doc, { lint: 'warn' })
@@ -30,5 +30,23 @@ describe('datasets server', () => {
     const { toolSet } = datasetsToolSet({ ...platformSet, skills: [skill, outside], guides })
     assert.deepEqual(toolSet.skills.map(s => [s.name, s.tools]), [['s', ['search_data', 'list_datasets']]])
     assert.deepEqual(toolSet.guides.map(g => [g.name, g.tools]), [['g', ['aggregate_data']]])
+  })
+})
+
+describe('platform server', () => {
+  it('leaves out the published catalog, which the datasets server alone serves', () => {
+    const names = backOfficeToolSet(platformSet).tools.map(t => t.name)
+    assert.ok(!names.includes('datafair_list_datasets'))
+    assert.ok(names.includes('datafair_list_account_datasets'))
+    assert.equal(names.length, platformSet.tools.length - 1)
+  })
+  it('cuts the tool lists of skills and guides, dropping those left with none', () => {
+    const skill = { name: 's', description: 'd', body: '', digest: '', tools: ['datafair_search_data', 'datafair_list_datasets'] }
+    const only = { ...skill, name: 'o', tools: ['datafair_list_datasets'] }
+    const unbound = { ...skill, name: 'u', tools: undefined }
+    const guides = [{ name: 'g', text: 't', tools: ['datafair_list_datasets'] }, { name: 'h', text: 't', tools: ['datafair_list_datasets', 'datafair_export_data'] }]
+    const { skills, guides: kept } = backOfficeToolSet({ ...platformSet, skills: [skill, only, unbound], guides })
+    assert.deepEqual(skills.map(s => [s.name, s.tools]), [['s', ['datafair_search_data']], ['u', undefined]])
+    assert.deepEqual(kept.map(g => [g.name, g.tools]), [['h', ['datafair_export_data']]])
   })
 })

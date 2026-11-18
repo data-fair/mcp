@@ -67,7 +67,7 @@ describe('server: createRuntime', () => {
     try {
       const client = new Client({ name: 'c', version: '0' }, { versionNegotiation: { mode: 'auto' } })
       await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { cookie: cookieFor(USER) } } }))
-      assert.ok((await client.listTools()).tools.some(t => t.name === 'datafair_list_datasets'))
+      assert.ok((await client.listTools()).tools.some(t => t.name === 'datafair_list_account_datasets'))
       await client.close()
     } finally {
       runtime.platform.close()

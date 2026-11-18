@@ -166,7 +166,7 @@ describe('app', () => {
       assert.match(tools[0].name, /^datafair_/)
       assert.ok(tools.some(t => t.name === 'geocode_address'))
       assert.ok(tools.some(t => t.name === 'datafair_update_dataset'), 'unscoped: every tool')
-      const res: any = await client.callTool({ name: 'datafair_list_datasets', arguments: {} })
+      const res: any = await client.callTool({ name: 'datafair_list_account_datasets', arguments: {} })
       assert.equal(res.isError, undefined, res.content[0].text)
       assert.match(res.content[0].text, /cookie=id_token=/, 'the identity reaches the API')
       assert.match(res.content[0].text, /Seen by portal\.test/, 'the call goes to the requesting site')
@@ -182,10 +182,11 @@ describe('app', () => {
     const client = await connect('/mcp-server/mcp', { ...PROXY, authorization })
     try {
       const tools = (await client.listTools()).tools.map(t => t.name)
-      assert.ok(tools.includes('datafair_list_datasets'))
+      assert.ok(tools.includes('datafair_list_account_datasets'))
+      assert.ok(!tools.includes('datafair_list_datasets'), 'the published catalog is the datasets server\'s')
       assert.ok(!tools.includes('datafair_update_dataset'))
       assert.ok(tools.includes('geocode_address'))
-      const res: any = await client.callTool({ name: 'datafair_list_datasets', arguments: {} })
+      const res: any = await client.callTool({ name: 'datafair_list_account_datasets', arguments: {} })
       assert.equal(res.isError, undefined, res.content[0].text)
       assert.equal(site.hits.at(-1)!.headers.authorization, authorization)
     } finally { await client.close() }
@@ -232,7 +233,7 @@ describe('app', () => {
   it('serves an in-cluster caller on the main site', async () => {
     const client = await connect('/mcp', { 'x-apikey': 'key' })
     try {
-      const res: any = await client.callTool({ name: 'datafair_list_datasets', arguments: {} })
+      const res: any = await client.callTool({ name: 'datafair_list_account_datasets', arguments: {} })
       assert.match(res.content[0].text, /Seen by 127\.0\.0\.1:\d+/)
       assert.match(res.content[0].text, /apikey=key/)
     } finally { await client.close() }
