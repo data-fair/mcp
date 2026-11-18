@@ -3,7 +3,8 @@
  * released server gave them. A fixed list, not a scope: the catalog listing and the account
  * listing carry the same security, so no scope set separates them.
  */
-import type { ToolSet } from '@data-fair/openapi-mcp'
+import { createHash } from 'node:crypto'
+import type { Skill, ToolSet } from '@data-fair/openapi-mcp'
 
 /** datasets server name → platform tool name, in the order the tools are served */
 export const DATASETS_TOOLS: Record<string, string> = {
@@ -35,9 +36,9 @@ export function datasetsToolSet (platform: ToolSet): { toolSet: ToolSet, missing
   const allServed = (names: (string | undefined)[]): names is string[] => names.every(n => n !== undefined && served.has(n))
   const skills: ToolSet['skills'] = []
   for (const skill of platform.skills) {
-    if (!skill.tools?.length) { skills.push(skill); continue }
+    if (!skill.tools?.length) { skills.push(withRenamedBody(skill, rename)); continue }
     const names = renamed(skill.tools)
-    if (allServed(names)) skills.push({ ...skill, tools: names })
+    if (allServed(names)) skills.push(withRenamedBody({ ...skill, tools: names }, rename))
   }
   const guides: ToolSet['guides'] = []
   for (const guide of platform.guides) {
@@ -45,4 +46,39 @@ export function datasetsToolSet (platform: ToolSet): { toolSet: ToolSet, missing
     if (allServed(names)) guides.push({ ...guide, tools: names })
   }
   return { toolSet: { tools, skills, guides }, missing }
+}
+
+/**
+ * A skill's body names the tools by their platform names, as text: those this server renames are
+ * renamed there too (and its digest follows), so the body names the tools a caller actually has.
+ */
+function withRenamedBody (skill: Skill, rename: Map<string, string>): Skill {
+  const body = skill.body.replace(/\bdatafair_[a-z0-9_]+\b/g, name => rename.get(name) ?? name)
+  if (body === skill.body) return skill
+  return { ...skill, body, digest: `sha256:${createHash('sha256').update(body, 'utf8').digest('hex')}` }
+}
+
+/**
+ * Platform tools the datasets server alone serves. The platform server is the back-office, where
+ * a call's outcome does not depend on the site it is made from; the published catalog of the
+ * site called from (list_datasets) is a visitor's view, which only that site answers, and its
+ * back-office counterpart is list_account_datasets.
+ */
+export const DATASETS_ONLY_TOOLS = new Set(['datafair_list_datasets'])
+
+/** The platform set without the datasets-only tools; a skill or guide loses their names and goes if that leaves it none. */
+export function backOfficeToolSet (platform: ToolSet): ToolSet {
+  const kept = (names: string[]) => names.filter(name => !DATASETS_ONLY_TOOLS.has(name))
+  const skills: ToolSet['skills'] = []
+  for (const skill of platform.skills) {
+    if (!skill.tools?.length) { skills.push(skill); continue }
+    const tools = kept(skill.tools)
+    if (tools.length) skills.push({ ...skill, tools })
+  }
+  const guides: ToolSet['guides'] = []
+  for (const guide of platform.guides) {
+    const tools = kept(guide.tools)
+    if (tools.length) guides.push({ ...guide, tools })
+  }
+  return { tools: platform.tools.filter(t => !DATASETS_ONLY_TOOLS.has(t.name)), skills, guides }
 }
