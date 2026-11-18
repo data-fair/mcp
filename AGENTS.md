@@ -48,7 +48,8 @@ Two usage modes:
 - `src/registry.ts` — the registry's skills per account (listing cache, packages via lib-node-registry,
   never throws), `src/registry-skills.ts` — a skill package parsed into a `Skill` with its files
 - `src/compose-skills.ts` — API-doc skills plus the registry's, cut to the caller's granted tools
-- `src/editor-schema.ts` — form-schema preparation for the editor tools
+- `src/editor-schema.ts` — form-schema preparation for the `form_*` tools (one group of eight for
+  every `x-agent.editor` operation, the form picked per call)
 - `src/ai-catalog.ts` — the `/ai-catalog.json` document
 - `src/home-page.ts` — the `/mcp-server/` home page (how to connect, per site)
 - `src/site-fetch.ts` — origin swap, dispatcher (DNS cache, optional in-cluster proxy hop)
@@ -65,6 +66,9 @@ Two usage modes:
 - Tools are filtered by verified scopes (`toolsForScopes`): lib-express's session verifies the
   cookie or bearer, this server never decodes a JWT; an API key or unscoped session sees every
   tool and data-fair checks each call
+- A tool's `forScopes` hook (the `form_*` group narrows its `form` enum to the granted forms) survives
+  a `{...tool}` copy unchanged: anything that wraps or renames a tool must do so after
+  `toolsForScopes` (as `site-links.ts` does), or rebuild `forScopes`
 - Cookie sessions of any subject are accepted (an in-portal assistant relays its user's
   cookies); a bearer must carry the MCP audience (`<site>/mcp-server`) and an NHI subject, and
   decides when a request also has a cookie

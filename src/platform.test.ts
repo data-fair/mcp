@@ -65,6 +65,38 @@ describe('platform', () => {
       assert.ok(platform.status().lastRefresh instanceof Date)
     } finally { off() }
   })
+  it('groups the editor operations in eight form tools, narrowed by scopes', async () => {
+    const editor = (name: string, title: string, scope: string, param: string) => ({
+      put: {
+        operationId: name,
+        'x-agent': { name, title: { en: title, fr: title }, editor: true },
+        security: [{ apiKey: [] }, { sdCookie: [] }, { oauth2: [scope] }],
+        parameters: [{ name: param, in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { title: { type: 'string' } } } } } },
+        responses: { 200: { description: 'saved' } }
+      }
+    })
+    site.setDoc(doc => {
+      doc.paths['/portals/api/pages/{pageId}/config'] = editor('portals_page_config', 'Page', 'pages:write', 'pageId')
+      doc.paths['/portals/api/portals/{portalId}/config'] = editor('portals_portal_config', 'Portal', 'portals:write', 'portalId')
+    })
+    assert.equal(await platform.refresh(), true)
+    const forms = (ts: { tools: any[] }) => ts.tools.filter(t => t.name.startsWith('form_'))
+    const all = forms(platform.platform(undefined))
+    const byName = (tools: any[], name: string) => tools.find(t => t.name === name)
+    assert.deepEqual(all.map(t => t.name).sort(), ['form_describeState', 'form_editArray', 'form_getData', 'form_getFieldSuggestions', 'form_reloadForm', 'form_saveForm', 'form_setData', 'form_setFieldValue'])
+    assert.deepEqual(byName(all, 'form_saveForm').inputSchema.properties.form.enum, ['portals_page_config', 'portals_portal_config'])
+    assert.equal(byName(all, 'form_saveForm').annotations.title, 'Form — save')
+    const pages = forms(platform.platform(['pages:write']))
+    assert.equal(pages.length, 8)
+    for (const t of pages) assert.deepEqual(t.inputSchema.properties.form.enum, ['portals_page_config'], t.name)
+    assert.equal(byName(pages, 'form_saveForm').annotations.title, 'Page — save')
+    assert.ok(!('portalId' in byName(pages, 'form_saveForm').inputSchema.properties))
+    assert.deepEqual(forms(platform.platform(['datasets:read'])), [])
+    assert.ok(platform.platform(undefined).skills.some(s => s.name === 'form'))
+    assert.ok(!platform.platform(['datasets:read']).skills.some(s => s.name === 'form'))
+    assert.deepEqual(forms(platform.datasets(undefined)), [])
+  })
   it('keeps the tools when a reload fails', async () => {
     const before = names(platform.platform(undefined))
     site.failDoc(500)
