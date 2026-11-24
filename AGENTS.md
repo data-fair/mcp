@@ -99,40 +99,25 @@ Two usage modes:
 
 ## Dev environment
 
-The dev environment is the shared one of the data-fair services (`@data-fair/lib-dev`, the
-`data-fair-service` skill of data-fair/lib): one zellij session per checkout, readable by humans,
-operated by agents only through `df-dev`. `dev/dev.json` declares the drawn ports and the panes'
-readiness URLs, `.zellij.kdl` the panes: `status` (memory, no containers), `api` (the MCP server in
-HTTP mode under nodemon), `inspector` (the MCP inspector on the platform server), and a free shell.
-No containers: the server calls the remote site of `config/development.cjs` (`portalUrl`).
+No containers: the server calls the remote site of `config/development.cjs` (`portalUrl`; override it with
+`PORTAL_URL` or a gitignored `config/local-development.cjs`).
 
-The user starts the session (`npm run dev-zellij`). An agent never starts or kills it.
+- `npm run dev:api` — the MCP server in HTTP mode under nodemon, at
+  `http://localhost:5750/mcp-server/mcp` and `/mcp-server/datasets/mcp` (`/mcp-server/ai-catalog.json`
+  answers when it is ready)
+- `npm run dev:inspector` — the MCP inspector on that server (port 5752)
+- `npm run dev` — both
 
-| Need | Command |
-|---|---|
-| What runs, what is broken | `npx --no df-dev status` (panes running / exited / **not ready**, memory) |
-| A process's output | `npx --no df-dev logs <pane> -n 100` (`api`, `inspector`) |
-| Restart one process | `npx --no df-dev restart <pane>`: Ctrl+C, rerun, waits for the pane's readiness URL |
+Default ports are in `dev/default.env` (`DEV_API_PORT`, `DEV_OBSERVER_PORT`, `INSPECTOR_PORT`,
+`INSPECTOR_PROXY_PORT`). A `.env` (gitignored) overrides them, and a variable already in the environment
+(`PORT`, `TRANSPORT`, `PORTAL_URL`...) wins over both.
 
-- Read the logs before restarting: nodemon already reloads on file changes.
-- "not ready" from `restart` → report to the user with the logs, never retry in a loop.
-- Never `kill`, `zellij action`, nor `npm ci` / `npm install` while the env runs
-  (watchers restart on half-installed modules).
-- Always `npx --no`: a bare `npx df-dev` downloads an unrelated public package when the dependency is
-  missing (dependency confusion). Scripts and CI call `./node_modules/.bin/df-dev`.
+Stdio: `TRANSPORT=stdio PORTAL_URL=<site> node index.ts` (`MCP_SERVER=platform` with `DATA_FAIR_API_KEY`).
 
-The servers answer on `http://localhost:$DEV_API_PORT/mcp-server/mcp` and `/mcp-server/datasets/mcp`;
-the inspector pane prints its URL with its session token. Ports are drawn per checkout into `.env`
-(`npx --no df-dev init-env`). Do not modify them.
-
-Worktrees, from the main checkout: `npx --no df-worktree <branch>` / `npx --no df-worktree-delete <branch>`
-(branch names: letters, digits, `.`, `_`, `-`, no `/`, and `mcp_<branch>` at most 60 characters).
-
-Stdio, outside the session: `TRANSPORT=stdio PORTAL_URL=<site> node index.ts` (`MCP_SERVER=platform`
-with `DATA_FAIR_API_KEY`).
+Design specs and implementation plans are not kept in this repository.
 
 ## Commands
 
-- `npm run dev-zellij` — the dev session (see "Dev environment")
+- `npm run dev` — the dev servers (see "Dev environment")
 - `npm run quality` — lint + build-types + type-check + tests
 - `npm run lint-fix` — auto-fix lint issues

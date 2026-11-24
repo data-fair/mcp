@@ -7,13 +7,15 @@
   "scripts": {
     "build-image": "docker build -t mcp-dev .",
     "build-types": "df-build-types .",
-    "dev-zellij": "df-dev zellij",
+    "dev": "bash dev/run.sh",
+    "dev:api": "bash dev/api.sh",
+    "dev:inspector": "bash dev/inspector.sh",
     "lint": "eslint .",
     "lint-fix": "eslint --fix .",
     "prepare": "husky || true",
     "check-types": "tsc",
-    "test": "NODE_ENV=test node --test --test-force-exit 'src/**/*.test.ts'",
-    "test:coverage": "NODE_ENV=test node --test --test-force-exit --experimental-test-coverage 'src/**/*.test.ts'",
+    "test": "NODE_ENV=test node --import ./test/clean-env.ts --test --test-force-exit 'src/**/*.test.ts'",
+    "test:coverage": "NODE_ENV=test node --import ./test/clean-env.ts --test --test-force-exit --experimental-test-coverage 'src/**/*.test.ts'",
     "quality": "npm run lint && npm run build-types && npm run check-types && npm run test && npm audit --omit=dev --audit-level=critical"
   },
   "author": "Alban Mouton <alban.mouton@gmail.com>",
@@ -46,7 +48,6 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
-    "@data-fair/lib-dev": "^0.1.1",
     "@data-fair/lib-utils": "^1.14.1",
     "@modelcontextprotocol/client": "^2.0.0",
     "@modelcontextprotocol/inspector": "^2.13.0",
