@@ -9,7 +9,7 @@
 1. Install dependencies and build the types:
    ```bash
    npm ci
-   npm run build-types
+   npm run dev-setup
    ```
 
 2. Start the MCP server in HTTP mode (`npm run dev:api`, port 5750), the MCP inspector

@@ -8,6 +8,7 @@
     "build-image": "docker build -t mcp-dev .",
     "build-types": "df-build-types .",
     "dev": "bash dev/run.sh",
+    "dev-setup": "bash dev/setup.sh",
     "dev:api": "bash dev/api.sh",
     "dev:inspector": "bash dev/inspector.sh",
     "lint": "eslint .",

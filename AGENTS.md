@@ -102,6 +102,7 @@ Two usage modes:
 No containers: the server calls the remote site of `config/development.cjs` (`portalUrl`; override it with
 `PORTAL_URL` or a gitignored `config/local-development.cjs`).
 
+- `npm run dev-setup` — the generated config types, when missing (idempotent); needed before the server and the tests
 - `npm run dev:api` — the MCP server in HTTP mode under nodemon, at
   `http://localhost:5750/mcp-server/mcp` and `/mcp-server/datasets/mcp` (`/mcp-server/ai-catalog.json`
   answers when it is ready)
