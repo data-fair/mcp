@@ -30,6 +30,18 @@ describe('datasets server', () => {
     assert.match(served.digest, /^sha256:[0-9a-f]{64}$/)
     assert.notEqual(served.digest, skill.digest)
   })
+  it('names no platform tool in the descriptions of the tools or of their parameters', () => {
+    const { toolSet } = datasetsToolSet(platformSet)
+    for (const tool of toolSet.tools) {
+      const texts = JSON.stringify({ d: tool.description, i: tool.inputSchema, o: tool.outputSchema })
+      assert.doesNotMatch(texts, /datafair_/, tool.name)
+    }
+    const describe = toolSet.tools.find(t => t.name === 'describe_dataset')
+    assert.match(JSON.stringify(describe?.inputSchema), /list_datasets/)
+    const search = toolSet.tools.find(t => t.name === 'search_data')
+    assert.match(search?.description ?? '', /use aggregate_data or calculate_metric/)
+    assert.doesNotMatch(search?.description ?? '', /datafair_/)
+  })
   it('renames the tool lists of skills and guides whose tools are all mapped', () => {
     const skill = { name: 's', description: 'd', body: '', digest: '', tools: ['datafair_search_data', 'datafair_list_datasets'] }
     const outside = { ...skill, name: 'o', tools: ['datafair_search_data', 'datafair_update_dataset'] }

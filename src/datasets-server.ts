@@ -16,6 +16,9 @@ export const DATASETS_TOOLS: Record<string, string> = {
   calculate_metric: 'datafair_calculate_metric'
 }
 
+/** Platform tools the datasets server does not have, named in texts by their counterpart here (the published catalog's listing). */
+const TEXT_ALIASES: Record<string, string> = { datafair_list_account_datasets: 'list_datasets' }
+
 /**
  * The mapped tools of a platform set, renamed; the skills and guides whose tools are all mapped
  * (a skill naming no tools stays), their tool lists renamed. `missing` lists the mapped names
@@ -23,12 +26,13 @@ export const DATASETS_TOOLS: Record<string, string> = {
  */
 export function datasetsToolSet (platform: ToolSet): { toolSet: ToolSet, missing: string[] } {
   const rename = new Map(Object.entries(DATASETS_TOOLS).map(([name, platformName]) => [platformName, name]))
+  const textRename = new Map([...rename, ...Object.entries(TEXT_ALIASES)])
   const byName = new Map(platform.tools.map(t => [t.name, t]))
   const tools: ToolSet['tools'] = []
   const missing: string[] = []
   for (const [name, platformName] of Object.entries(DATASETS_TOOLS)) {
     const tool = byName.get(platformName)
-    if (tool) tools.push({ ...tool, name })
+    if (tool) tools.push(withRenamedTexts({ ...tool, name }, textRename))
     else missing.push(name)
   }
   const served = new Set(tools.map(t => t.name))
@@ -36,9 +40,9 @@ export function datasetsToolSet (platform: ToolSet): { toolSet: ToolSet, missing
   const allServed = (names: (string | undefined)[]): names is string[] => names.every(n => n !== undefined && served.has(n))
   const skills: ToolSet['skills'] = []
   for (const skill of platform.skills) {
-    if (!skill.tools?.length) { skills.push(withRenamedBody(skill, rename)); continue }
+    if (!skill.tools?.length) { skills.push(withRenamedBody(skill, textRename)); continue }
     const names = renamed(skill.tools)
-    if (allServed(names)) skills.push(withRenamedBody({ ...skill, tools: names }, rename))
+    if (allServed(names)) skills.push(withRenamedBody({ ...skill, tools: names }, textRename))
   }
   const guides: ToolSet['guides'] = []
   for (const guide of platform.guides) {
@@ -52,8 +56,28 @@ export function datasetsToolSet (platform: ToolSet): { toolSet: ToolSet, missing
  * A skill's body names the tools by their platform names, as text: those this server renames are
  * renamed there too (and its digest follows), so the body names the tools a caller actually has.
  */
+function renameTools (text: string, rename: Map<string, string>): string {
+  return text.replace(/\bdatafair_[a-z0-9_]+\b/g, name => rename.get(name) ?? name)
+}
+
+/** A tool's description and every description inside its schemas name the tools too: renamed the same way. */
+function withRenamedTexts (tool: ToolSet['tools'][number], rename: Map<string, string>): ToolSet['tools'][number] {
+  const walk = (value: unknown): unknown => {
+    if (typeof value === 'string') return renameTools(value, rename)
+    if (Array.isArray(value)) return value.map(walk)
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, k === 'description' || typeof v === 'object' ? walk(v) : v]))
+    return value
+  }
+  return {
+    ...tool,
+    description: renameTools(tool.description, rename),
+    inputSchema: walk(tool.inputSchema) as typeof tool.inputSchema,
+    ...(tool.outputSchema ? { outputSchema: walk(tool.outputSchema) as typeof tool.outputSchema } : {})
+  }
+}
+
 function withRenamedBody (skill: Skill, rename: Map<string, string>): Skill {
-  const body = skill.body.replace(/\bdatafair_[a-z0-9_]+\b/g, name => rename.get(name) ?? name)
+  const body = renameTools(skill.body, rename)
   if (body === skill.body) return skill
   return { ...skill, body, digest: `sha256:${createHash('sha256').update(body, 'utf8').digest('hex')}` }
 }
